@@ -8,8 +8,8 @@ import { sendPaymentFailedEmail, sendPurchaseConfirmation, sendRefundEmail } fro
 import { Course, Purchase, UserProfile } from "./models";
 import { createStripeClient } from "./stripeClient";
 import { sendWhatsappMessage } from "./whatsapp";
-import { ddb, LEADS_TABLE } from "./dynamodb";
-import { PutCommand } from "@aws-sdk/lib-dynamodb";
+import { ddb, LEADS_TABLE, USERS_TABLE } from "./dynamodb";
+import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 import { generateUid } from "./auth";
 
 export type ApiAuth = {
@@ -630,7 +630,6 @@ export async function handleRequestProductInfo(request: ApiRequest<RequestProduc
   const productId = assertString(data.productId, "productId");
   const productName = assertString(data.productName, "productName");
   const phoneNumber = assertString(data.phoneNumber, "phoneNumber");
-  const customerName = assertString(data.customerName, "customerName");
 
   // Validate phone number format
   if (!/^\+?[\d\s\-()]+$/.test(phoneNumber) || phoneNumber.replace(/\D/g, "").length < 10) {
@@ -640,6 +639,25 @@ export async function handleRequestProductInfo(request: ApiRequest<RequestProduc
   const vendorPhone = whatsappPhoneNumber.value().replace(/\D/g, "");
   if (!vendorPhone) {
     throw new HttpsError("unavailable", "WhatsApp phone number is not configured.");
+  }
+
+  let customerName = data.customerName?.trim() || "";
+
+  // If user is authenticated and no name provided, fetch from profile
+  if (!customerName && request.auth?.uid) {
+    const userResult = await ddb.send(
+      new GetCommand({
+        TableName: USERS_TABLE,
+        Key: { uid: request.auth.uid },
+      })
+    );
+    if (userResult.Item?.name) {
+      customerName = userResult.Item.name as string;
+    }
+  }
+
+  if (!customerName) {
+    throw new HttpsError("invalid-argument", "customerName is required when not authenticated.");
   }
 
   try {
@@ -655,7 +673,7 @@ export async function handleRequestProductInfo(request: ApiRequest<RequestProduc
           productId,
           productName,
           customerPhone: phoneNumber.replace(/\D/g, ""),
-          customerName: customerName.trim(),
+          customerName,
           customerEmail: data.customerEmail || null,
           userId: request.auth?.uid || null,
           status: "pending",
