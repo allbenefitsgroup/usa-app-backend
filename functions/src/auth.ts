@@ -66,13 +66,15 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
 export async function optionalAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
+  console.log("[optionalAuth] Path:", req.path, "| Auth header:", authHeader ? "present" : "missing");
   if (authHeader && authHeader.startsWith("Bearer ")) {
     try {
       const token = authHeader.split("Bearer ")[1];
       const decoded = verifyToken(token);
       (req as any).authContext = decoded;
-    } catch {
-      // ignore invalid optional token
+      console.log("[optionalAuth] Token valid for uid:", decoded.uid);
+    } catch (e: any) {
+      console.log("[optionalAuth] Token invalid:", e.message);
     }
   }
   next();
