@@ -35,3 +35,4 @@ export const jwtSecret = createString("JWT_SECRET", "cambiar-esto-en-produccion-
 
 // WhatsApp configuration
 export const whatsappEnabled = createString("WHATSAPP_ENABLED", "false");
+export const whatsappPhoneNumber = createString("WHATSAPP_PHONE_NUMBER", "");

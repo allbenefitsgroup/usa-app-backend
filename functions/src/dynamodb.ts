@@ -7,3 +7,4 @@ const client = new DynamoDBClient({ region: REGION });
 export const ddb = DynamoDBDocumentClient.from(client);
 
 export const USERS_TABLE = process.env.DYNAMODB_USERS_TABLE || "usa-users";
+export const LEADS_TABLE = process.env.DYNAMODB_LEADS_TABLE || "usa-leads";

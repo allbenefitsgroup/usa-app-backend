@@ -2,12 +2,15 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { CallableRequest, HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import Stripe from "stripe";
-import { appUrl, emailApiKey, jwtSecret, REGION, stripeSecretKey, stripeWebhookSecret, supportEmail, whatsappEnabled } from "./config";
+import { appUrl, emailApiKey, jwtSecret, REGION, stripeSecretKey, stripeWebhookSecret, supportEmail, whatsappEnabled, whatsappPhoneNumber } from "./config";
 import { db } from "./firebase";
 import { sendPaymentFailedEmail, sendPurchaseConfirmation, sendRefundEmail } from "./email";
 import { Course, Purchase, UserProfile } from "./models";
 import { createStripeClient } from "./stripeClient";
 import { sendWhatsappMessage } from "./whatsapp";
+import { ddb, LEADS_TABLE } from "./dynamodb";
+import { PutCommand } from "@aws-sdk/lib-dynamodb";
+import { generateUid } from "./auth";
 
 export type ApiAuth = {
   uid: string;
@@ -634,47 +637,48 @@ export async function handleRequestProductInfo(request: ApiRequest<RequestProduc
     throw new HttpsError("invalid-argument", "Invalid phone number format.");
   }
 
-  if (whatsappEnabled.value() !== "true") {
-    throw new HttpsError("unavailable", "WhatsApp service is not available.");
+  const vendorPhone = whatsappPhoneNumber.value().replace(/\D/g, "");
+  if (!vendorPhone) {
+    throw new HttpsError("unavailable", "WhatsApp phone number is not configured.");
   }
 
   try {
-    const leadRef = db.collection("leads").doc();
-    const now = FieldValue.serverTimestamp();
+    const leadId = generateUid();
+    const now = new Date().toISOString();
 
-    await leadRef.set({
-      id: leadRef.id,
-      productId,
-      productName,
-      phoneNumber,
-      customerName,
-      customerEmail: data.customerEmail || null,
-      userId: request.auth?.uid || null,
-      status: "pending",
-      notes: null,
-      whatsappSentAt: null,
-      contactedAt: null,
-      createdAt: now,
-      updatedAt: now,
-    });
+    // Save lead to DynamoDB
+    await ddb.send(
+      new PutCommand({
+        TableName: LEADS_TABLE,
+        Item: {
+          leadId,
+          productId,
+          productName,
+          customerPhone: phoneNumber.replace(/\D/g, ""),
+          customerName: customerName.trim(),
+          customerEmail: data.customerEmail || null,
+          userId: request.auth?.uid || null,
+          status: "pending",
+          contactedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      })
+    );
 
-    const whatsappMessage = `Hola ${customerName}, has solicitado informacin sobre ${productName}. En breves se comunicar un agente para brindarte ms detalles.Gracias!`;
+    // Build pre-filled WhatsApp message
+    const message = `Hola, me interesa obtener más información sobre: ${productName}. Mi nombre es ${customerName}.`;
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/${vendorPhone}?text=${encodedMessage}`;
 
-    const whatsappSuccess = await sendWhatsappMessage(phoneNumber, whatsappMessage);
-
-    if (whatsappSuccess) {
-      await leadRef.update({
-        whatsappSentAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    } else {
-      logger.warn("WhatsApp message failed but lead was created", { leadId: leadRef.id });
-    }
+    logger.info("Lead created and WhatsApp link generated", { leadId, productId, vendorPhone });
 
     return {
       ok: true,
-      leadId: leadRef.id,
-      message: "Lead creado. Se envi confirmacin por WhatsApp.",
+      leadId,
+      whatsappUrl,
+      vendorPhone,
+      message: "Lead guardado. Abrí el enlace de WhatsApp para contactar al vendedor.",
     };
   } catch (error) {
     logger.error("Failed to create lead request", error);
