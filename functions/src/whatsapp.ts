@@ -1,20 +1,40 @@
-import { create } from "@open-wa/wa-automate";
 import * as logger from "firebase-functions/logger";
 
-type WhatsappClient = any; // OpenWA doesn't export types properly
+// WARNING: @open-wa/wa-automate uses Puppeteer (headless Chrome).
+// It does NOT work in Firebase Functions serverless environment.
+// For production WhatsApp messaging, use the WhatsApp Business API (Meta) instead.
+// This module is kept for local development only.
 
-let whatsappClient: WhatsappClient | null = null;
+const isEmulator = !!process.env.FUNCTIONS_EMULATOR;
+const isLocalServer = !process.env.K_SERVICE && !isEmulator;
+
+let waAutomateModule: any = null;
+let whatsappClient: any = null;
+
+async function getWaAutomate() {
+  if (!waAutomateModule) {
+    waAutomateModule = await import("@open-wa/wa-automate");
+  }
+  return waAutomateModule;
+}
 
 /**
  * Initialize WhatsApp client. Must be called before sending messages.
  * In development, this scans a QR code. In production, session is persisted.
+ * NOTE: This will NOT work inside Firebase Functions. Only run locally.
  */
-export async function initializeWhatsappClient(): Promise<WhatsappClient> {
+export async function initializeWhatsappClient(): Promise<any> {
   if (whatsappClient) {
     return whatsappClient;
   }
 
+  if (!isLocalServer) {
+    logger.warn("WhatsApp Web client initialization skipped in serverless environment.");
+    return null;
+  }
+
   try {
+    const { create } = await getWaAutomate();
     whatsappClient = await create({
       sessionId: "all-benefits-group",
       headless: true,
@@ -38,9 +58,18 @@ export async function initializeWhatsappClient(): Promise<WhatsappClient> {
  * @param message - Message text to send
  */
 export async function sendWhatsappMessage(phoneNumber: string, message: string): Promise<boolean> {
+  if (!isLocalServer) {
+    logger.warn("WhatsApp message skipped in serverless environment.", { phoneNumber });
+    return false;
+  }
+
   try {
     if (!whatsappClient) {
       whatsappClient = await initializeWhatsappClient();
+    }
+
+    if (!whatsappClient) {
+      return false;
     }
 
     // Ensure phone number is in correct format (remove any non-digits except +)

@@ -1,11 +1,12 @@
 import { onRequest } from "firebase-functions/v2/https";
-import { REGION, stripeSecretKey, stripeWebhookSecret, emailApiKey, jwtSecret } from "./config";
+import { REGION } from "./config";
 import app from "./server";
 
 export const api = onRequest(
   {
     region: REGION,
-    secrets: [stripeSecretKey, stripeWebhookSecret, emailApiKey, jwtSecret] as any,
+    memory: "512MiB",
+    timeoutSeconds: 60,
   },
   app,
 );

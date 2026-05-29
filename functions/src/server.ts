@@ -95,6 +95,19 @@ app.get("/", (_req: Request, res: Response) => {
   res.json({ status: "ok", service: "usa-app-backend" });
 });
 
+// Global error handler
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("Express error:", err);
+  if (!res.headersSent) {
+    res.status(err.status || 500).json({
+      error: {
+        message: err.message || "Internal server error",
+        status: err.status || "INTERNAL",
+      },
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 if (!process.env.FUNCTIONS_EMULATOR && !process.env.K_SERVICE) {
   app.listen(PORT, () => {

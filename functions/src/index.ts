@@ -609,7 +609,7 @@ export async function handleStripeWebhook(request: any, response: any) {
 export const stripeWebhook = onRequest(
   {
     region: REGION,
-    secrets: [stripeSecretKey, stripeWebhookSecret, emailApiKey, jwtSecret] as any,
+    secrets: [stripeSecretKey, stripeWebhookSecret, emailApiKey] as any,
   },
   handleStripeWebhook,
 );
