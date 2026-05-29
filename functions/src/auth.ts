@@ -158,6 +158,8 @@ export async function handleRegister(req: Request, res: Response) {
 
     const uid = generateUid();
     const passwordHash = await hashPassword(password);
+    console.log("[DEBUG REGISTER] Hash generated:", passwordHash?.substring(0, 30) + "...");
+    console.log("[DEBUG REGISTER] Hash length:", passwordHash?.length);
     const now = new Date().toISOString();
 
     await ddb.send(
@@ -233,7 +235,15 @@ export async function handleLogin(req: Request, res: Response) {
       return;
     }
 
+    console.log("[DEBUG LOGIN] Email:", email.toLowerCase().trim());
+    console.log("[DEBUG LOGIN] User found:", user.email);
+    console.log("[DEBUG LOGIN] Hash from DB:", user.passwordHash?.substring(0, 30) + "...");
+    console.log("[DEBUG LOGIN] Hash length:", user.passwordHash?.length);
+    console.log("[DEBUG LOGIN] Password input:", password);
+    
     const valid = await verifyPassword(password, user.passwordHash);
+    console.log("[DEBUG LOGIN] verifyPassword result:", valid);
+    
     if (!valid) {
       res.status(401).json({ error: { message: "Invalid email or password.", status: "UNAUTHENTICATED" } });
       return;
