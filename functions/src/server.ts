@@ -86,7 +86,8 @@ app.post(stripeWebhookPath, async (req: Request, res: Response) => {
 });
 
 // Swagger docs
-const swaggerDocument = YAML.load(path.join(__dirname, "swagger.yaml"));
+const swaggerPath = path.join(__dirname, "..", "src", "swagger.yaml");
+const swaggerDocument = YAML.load(swaggerPath);
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Health check
