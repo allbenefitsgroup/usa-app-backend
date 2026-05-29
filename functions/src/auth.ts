@@ -225,25 +225,16 @@ export async function handleLogin(req: Request, res: Response) {
     const scanResult = await ddb.send(
       new ScanCommand({
         TableName: USERS_TABLE,
-        FilterExpression: "email = :email",
-        ExpressionAttributeValues: { ":email": searchEmail },
-        Limit: 1,
       })
     );
 
-    console.log("[DEBUG LOGIN] Scan found items:", scanResult.Items?.length || 0);
+    console.log("[DEBUG LOGIN] Total items in table:", scanResult.Items?.length || 0);
+    
+    const user = scanResult.Items?.find((item: any) => item.email === searchEmail);
+    console.log("[DEBUG LOGIN] User found by manual filter:", user ? "YES" : "NO");
 
-    if (!scanResult.Items || scanResult.Items.length === 0) {
+    if (!user) {
       console.log("[DEBUG LOGIN] FAIL: User not found in DB");
-      res.status(401).json({ error: { message: "Invalid email or password.", status: "UNAUTHENTICATED" } });
-      return;
-    }
-
-    const user = scanResult.Items[0] as any;
-    console.log("[DEBUG LOGIN] User found:", user.email, "UID:", user.uid);
-
-    if (!user.passwordHash) {
-      console.log("[DEBUG LOGIN] FAIL: User has no passwordHash");
       res.status(401).json({ error: { message: "Invalid email or password.", status: "UNAUTHENTICATED" } });
       return;
     }
