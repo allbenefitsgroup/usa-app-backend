@@ -30,5 +30,8 @@ export const emailApiKey = createSecret("EMAIL_API_KEY");
 export const appUrl = createString("APP_URL");
 export const supportEmail = createString("SUPPORT_EMAIL");
 
+// Auth
+export const jwtSecret = createSecret("JWT_SECRET");
+
 // WhatsApp configuration
 export const whatsappEnabled = createString("WHATSAPP_ENABLED", "false");

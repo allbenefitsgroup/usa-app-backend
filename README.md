@@ -1,10 +1,10 @@
 # USA All Benefits Group Backend
 
-Backend Firebase para vender cursos digitales desde la sección **Aprende** de una app Flutter.
+Backend Firebase para vender cursos digitales desde la seccion **Aprende** de una app Flutter.
 
 ## Stack
 
-- Firebase Authentication para usuarios.
+- **Auth propio** con JWT, bcrypt y endpoints REST.
 - Firestore como base de datos.
 - Firebase Cloud Functions para backend seguro.
 - Stripe Checkout para pagos.
@@ -22,39 +22,124 @@ Backend Firebase para vender cursos digitales desde la sección **Aprende** de u
 │   ├── tsconfig.json
 │   ├── .env.example
 │   └── src
+│       ├── api.ts
+│       ├── auth.ts
 │       ├── config.ts
 │       ├── email.ts
 │       ├── firebase.ts
 │       ├── index.ts
 │       ├── models.ts
 │       ├── money.ts
-│       └── stripeClient.ts
+│       ├── server.ts
+│       ├── stripeClient.ts
+│       └── swagger.yaml
 └── docs
     ├── firestore-examples.md
     └── flutter-checkout.md
 ```
 
-## Cloud Functions
+## Endpoints REST (Auth propio)
 
-- `createUserProfile`: crea el perfil básico cuando Firebase Auth crea un usuario.
-- `syncUserProfile`: callable para guardar `name`, `phone` y `role` desde Flutter.
-- `createCheckoutSession`: callable segura para crear una sesión Stripe Checkout.
-- `stripeWebhook`: HTTPS function para confirmar pagos, fallos y reembolsos.
-- `getMyCourseAccess`: callable para que Flutter consulte compras y acceso.
+La API expone endpoints REST bajo la funcion `api` (o servidor Express local).
+
+### Auth
+
+- `POST /api/auth/register` - Registro de nuevos usuarios (cliente, customer, student, seller).
+- `POST /api/auth/login` - Inicio de sesion con email y password. Devuelve JWT.
+- `GET /api/auth/me` - Obtener perfil del usuario autenticado.
+
+### Negocio (requieren `Authorization: Bearer <token>`)
+
+- `POST /api/syncUserProfile` - Guardar/actualizar nombre, telefono y rol.
+- `POST /api/createCheckoutSession` - Crear sesion de pago Stripe.
+- `POST /api/getMyCourseAccess` - Listar compras y acceso a cursos.
+- `POST /api/requestProductInfo` - Solicitar info de producto (WhatsApp lead).
+- `POST /api/sendWhatsappNotification` - Enviar notificacion WhatsApp.
+
+### Webhooks
+
+- `POST /stripeWebhook` - Webhook de Stripe (raw body).
+
+## Documentacion Swagger
+
+Puedes probar todos los endpoints desde el navegador:
+
+- **Local:** http://localhost:3000/docs
+- **Produccion (Firebase):** `https://us-central1-TU_PROJECT_ID.cloudfunctions.net/api/docs`
+
+La interfaz Swagger UI permite ver los schemas, probar peticiones y copiar los `curl` directamente.
+
+## Registro y Login
+
+### 1. Registro
+
+```http
+POST /api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Juan Perez",
+  "email": "juan@example.com",
+  "password": "secreto123",
+  "phone": "+13051234567",
+  "role": "client"
+}
+```
+
+Roles validos: `client`, `customer`, `student`, `seller`.
+
+Respuesta:
+```json
+{
+  "ok": true,
+  "uid": "abc123...",
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": { ... }
+}
+```
+
+### 2. Login
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "juan@example.com",
+  "password": "secreto123"
+}
+```
+
+Respuesta:
+```json
+{
+  "ok": true,
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": { ... }
+}
+```
+
+### 3. Usar el token
+
+Incluir en todas las peticiones protegidas:
+
+```
+Authorization: Bearer <token>
+```
 
 ## Modelo Firestore
 
 Colecciones principales:
 
-- `users/{uid}`: perfil básico del usuario.
-- `courses/{courseId}`: catálogo público de cursos activos.
+- `users/{uid}`: perfil basico del usuario (incluye `passwordHash`).
+- `courses/{courseId}`: catalogo publico de cursos activos.
 - `purchases/{purchaseId}`: compras creadas y actualizadas solo por Cloud Functions.
 - `users/{uid}/courseAccess/{courseId}`: acceso habilitado o revocado por curso.
 - `courseContent/{courseId}`: contenido privado del curso, solo admin o usuarios con acceso pago.
 
-Importante: si `courses/{courseId}` es público, no guardes allí URLs privadas de clases pagas. Firestore no puede ocultar campos individuales. El campo `videoUrl` del curso debe ser un trailer o preview público. Las URLs privadas reales van en `courseContent/{courseId}`.
+Importante: si `courses/{courseId}` es publico, no guardes alli URLs privadas de clases pagas. Firestore no puede ocultar campos individuales. El campo `videoUrl` del curso debe ser un trailer o preview publico. Las URLs privadas reales van en `courseContent/{courseId}`.
 
-## Configuración
+## Configuracion
 
 1. Instala dependencias:
 
@@ -78,6 +163,7 @@ npm install
 ```bash
 APP_URL=https://tu-app.com
 SUPPORT_EMAIL=soporte@tu-dominio.com
+JWT_SECRET=tu-clave-secreta-muy-larga-y-aleatoria
 ```
 
 4. Configura secretos:
@@ -86,6 +172,7 @@ SUPPORT_EMAIL=soporte@tu-dominio.com
 firebase functions:secrets:set STRIPE_SECRET_KEY
 firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
 firebase functions:secrets:set EMAIL_API_KEY
+firebase functions:secrets:set JWT_SECRET
 ```
 
 `SUPPORT_EMAIL` debe ser un sender verificado en SendGrid.
@@ -95,8 +182,11 @@ firebase functions:secrets:set EMAIL_API_KEY
 En Stripe Dashboard crea un webhook apuntando a:
 
 ```text
-https://us-central1-TU_PROJECT_ID.cloudfunctions.net/stripeWebhook
+https://us-central1-TU_PROJECT_ID.cloudfunctions.net/api/stripeWebhook
 ```
+
+> Si usas la funcion `stripeWebhook` separada, la URL es:
+> `https://us-central1-TU_PROJECT_ID.cloudfunctions.net/stripeWebhook`
 
 Eventos requeridos:
 
@@ -114,7 +204,7 @@ firebase use tu-project-id
 firebase deploy --only functions,firestore:rules,firestore:indexes
 ```
 
-También puedes usar:
+Tambien puedes usar:
 
 ```bash
 cd functions
@@ -123,19 +213,18 @@ npm run deploy
 
 ## Flujo Completo De Compra
 
-1. El usuario se registra o inicia sesión con Firebase Authentication.
-2. `createUserProfile` crea `users/{uid}` automáticamente.
-3. Flutter llama `syncUserProfile` para guardar nombre y teléfono opcional.
-4. Flutter lista cursos activos desde `courses`.
-5. El usuario toca comprar.
-6. Flutter llama `createCheckoutSession` con `userId` y `courseId`.
-7. Cloud Functions valida el usuario autenticado, busca el curso, crea `purchases/{purchaseId}` en `pending` y crea Stripe Checkout.
-8. La app abre la URL devuelta por Stripe.
-9. Stripe envía `checkout.session.completed` al webhook.
-10. `stripeWebhook` verifica la firma, marca la compra como `paid`, crea `users/{uid}/courseAccess/{courseId}` con `status: active` y envía email de confirmación.
-11. Flutter llama `getMyCourseAccess` o lee sus compras para saber si el curso está `paid`, `pending`, `failed` o `refunded`.
-12. Si Stripe reporta fallo, la compra pasa a `failed` y se envía email.
-13. Si hay reembolso, la compra pasa a `refunded`, el acceso se revoca y se envía email.
+1. El frontend llama `POST /api/auth/register` (o `/login`) y guarda el JWT.
+2. El frontend llama `POST /api/syncUserProfile` para guardar nombre y telefono (rol se define en el registro).
+3. Flutter lista cursos activos desde `courses`.
+4. El usuario toca comprar.
+5. Flutter llama `POST /api/createCheckoutSession` con `userId` y `courseId`.
+6. El backend valida el usuario autenticado, busca el curso, crea `purchases/{purchaseId}` en `pending` y crea Stripe Checkout.
+7. La app abre la URL devuelta por Stripe.
+8. Stripe envia `checkout.session.completed` al webhook.
+9. `stripeWebhook` verifica la firma, marca la compra como `paid`, crea `users/{uid}/courseAccess/{courseId}` con `status: active` y envia email de confirmacion.
+10. Flutter llama `POST /api/getMyCourseAccess` o lee sus compras para saber si el curso esta `paid`, `pending`, `failed` o `refunded`.
+11. Si Stripe reporta fallo, la compra pasa a `failed` y se envia email.
+12. Si hay reembolso, la compra pasa a `refunded`, el acceso se revoca y se envia email.
 
 ## Seguridad
 
@@ -145,20 +234,14 @@ Las reglas en `firestore.rules` hacen que:
 - cada usuario lea solo sus propias compras;
 - clientes no puedan crear ni modificar compras;
 - clientes no puedan marcar compras como pagadas;
-- cursos activos sean públicos;
+- cursos activos sean publicos;
 - escritura de cursos sea solo admin;
 - contenido privado del curso requiera acceso pago;
 - Cloud Functions use Admin SDK y pueda escribir compras/accesos sin pasar por reglas.
 
-Para administrar cursos, asigna custom claims admin desde un entorno confiable:
-
-```js
-await admin.auth().setCustomUserClaims(uid, { admin: true });
-```
-
 ## Notas De Precio
 
-`courses.price` está en unidades menores para evitar errores de decimales.
+`courses.price` esta en unidades menores para evitar errores de decimales.
 
 - USD 99.00 se guarda como `9900`.
 - USD 19.99 se guarda como `1999`.

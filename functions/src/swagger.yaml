@@ -1,0 +1,471 @@
+openapi: 3.0.0
+info:
+  title: USA All Benefits Group Backend API
+  description: |
+    Backend REST para registro de usuarios, pagos Stripe, cursos y notificaciones WhatsApp.
+    Auth propio con JWT.
+  version: 1.0.0
+  contact:
+    name: USA All Benefits Group
+servers:
+  - url: http://localhost:3000
+    description: Servidor local (Express)
+  - url: https://us-central1-TU_PROJECT_ID.cloudfunctions.net/api
+    description: Firebase Cloud Functions (produccion)
+
+paths:
+  /api/auth/register:
+    post:
+      summary: Registrar un nuevo usuario
+      description: |
+        Crea una cuenta con email, password, nombre, telefono y rol.
+        Roles validos: `client`, `customer`, `student`, `seller`.
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - password
+                - role
+              properties:
+                name:
+                  type: string
+                  example: "Juan Perez"
+                email:
+                  type: string
+                  format: email
+                  example: "juan@example.com"
+                password:
+                  type: string
+                  format: password
+                  minLength: 6
+                  example: "secreto123"
+                phone:
+                  type: string
+                  nullable: true
+                  example: "+13051234567"
+                role:
+                  type: string
+                  enum:
+                    - client
+                    - customer
+                    - student
+                    - seller
+                  example: "client"
+      responses:
+        "201":
+          description: Usuario creado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  uid:
+                    type: string
+                  token:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      uid:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      phone:
+                        type: string
+                        nullable: true
+                      role:
+                        type: string
+        "400":
+          description: Datos invalidos
+        "409":
+          description: El email ya esta registrado
+
+  /api/auth/login:
+    post:
+      summary: Iniciar sesion
+      description: Autentica con email y password y devuelve un JWT.
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "juan@example.com"
+                password:
+                  type: string
+                  format: password
+                  example: "secreto123"
+      responses:
+        "200":
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  token:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      uid:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      phone:
+                        type: string
+                        nullable: true
+                      role:
+                        type: string
+        "401":
+          description: Credenciales invalidas
+
+  /api/auth/me:
+    get:
+      summary: Obtener perfil del usuario autenticado
+      description: Devuelve los datos del usuario segun el token JWT enviado.
+      tags:
+        - Auth
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Perfil del usuario
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uid:
+                    type: string
+                  name:
+                    type: string
+                  email:
+                    type: string
+                  phone:
+                    type: string
+                    nullable: true
+                  role:
+                    type: string
+        "401":
+          description: No autenticado
+        "404":
+          description: Usuario no encontrado
+
+  /api/syncUserProfile:
+    post:
+      summary: Sincronizar perfil de usuario
+      description: |
+        Guarda o actualiza nombre, telefono y rol del usuario.
+        El rol solo se puede definir una vez; despues no se permite cambiarlo.
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  example: "Juan Perez"
+                phone:
+                  type: string
+                  nullable: true
+                  example: "+13051234567"
+                role:
+                  type: string
+                  enum:
+                    - client
+                    - customer
+                    - student
+                    - seller
+                  example: "client"
+      responses:
+        "200":
+          description: Perfil sincronizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    properties:
+                      ok:
+                        type: boolean
+        "401":
+          description: No autenticado
+        "400":
+          description: Datos invalidos
+
+  /api/createCheckoutSession:
+    post:
+      summary: Crear sesion de pago Stripe
+      description: |
+        Crea una compra en estado `pending` y una sesion de Stripe Checkout.
+        Devuelve la URL para redirigir al usuario.
+      tags:
+        - Payments
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+                - courseId
+              properties:
+                userId:
+                  type: string
+                  example: "abc123"
+                courseId:
+                  type: string
+                  example: "course_001"
+      responses:
+        "200":
+          description: Sesion creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    properties:
+                      checkoutUrl:
+                        type: string
+                        format: uri
+                      sessionId:
+                        type: string
+                      purchaseId:
+                        type: string
+        "401":
+          description: No autenticado
+        "404":
+          description: Curso no encontrado
+        "403":
+          description: No puede crear checkout para otro usuario
+
+  /api/getMyCourseAccess:
+    post:
+      summary: Obtener mis compras y acceso a cursos
+      description: |
+        Lista todas las compras del usuario autenticado con su estado
+        (`pending`, `paid`, `failed`, `refunded`) y datos del curso.
+      tags:
+        - Payments
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Lista de compras
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    properties:
+                      purchases:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            userId:
+                              type: string
+                            courseId:
+                              type: string
+                            status:
+                              type: string
+                            amount:
+                              type: integer
+                            currency:
+                              type: string
+                            customerEmail:
+                              type: string
+                            createdAt:
+                              type: integer
+                              nullable: true
+                            paidAt:
+                              type: integer
+                              nullable: true
+                            course:
+                              type: object
+                              nullable: true
+                            canViewContent:
+                              type: boolean
+        "401":
+          description: No autenticado
+
+  /api/requestProductInfo:
+    post:
+      summary: Solicitar informacion de producto
+      description: |
+        Crea un lead y envia un mensaje de confirmacion por WhatsApp.
+        No requiere autenticacion, pero si se envia un token se asocia al lead.
+      tags:
+        - Leads
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - productId
+                - productName
+                - phoneNumber
+                - customerName
+              properties:
+                productId:
+                  type: string
+                  example: "prod_001"
+                productName:
+                  type: string
+                  example: "Curso de Seguros"
+                phoneNumber:
+                  type: string
+                  example: "+13051234567"
+                customerName:
+                  type: string
+                  example: "Juan Perez"
+                customerEmail:
+                  type: string
+                  nullable: true
+                  example: "juan@example.com"
+      responses:
+        "200":
+          description: Lead creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    properties:
+                      ok:
+                        type: boolean
+                      leadId:
+                        type: string
+                      message:
+                        type: string
+        "400":
+          description: Datos invalidos
+
+  /api/sendWhatsappNotification:
+    post:
+      summary: Enviar notificacion por WhatsApp
+      description: Envia un mensaje de WhatsApp a un numero especifico.
+      tags:
+        - Notifications
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phoneNumber
+                - message
+              properties:
+                phoneNumber:
+                  type: string
+                  example: "+13051234567"
+                message:
+                  type: string
+                  example: "Hola, tu pago fue confirmado."
+      responses:
+        "200":
+          description: Mensaje enviado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    properties:
+                      ok:
+                        type: boolean
+                      message:
+                        type: string
+        "401":
+          description: No autenticado
+        "400":
+          description: Numero o mensaje invalido
+
+  /stripeWebhook:
+    post:
+      summary: Webhook de Stripe
+      description: |
+        Recibe eventos de Stripe para confirmar pagos, fallos y reembolsos.
+        **No usar desde el frontend.** Stripe llama a este endpoint directamente.
+      tags:
+        - Webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Evento procesado
+        "400":
+          description: Firma invalida
+        "405":
+          description: Metodo no permitido
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenido en /api/auth/login o /api/auth/register

@@ -1,14 +1,25 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { auth as authV1 } from "firebase-functions/v1";
 import * as logger from "firebase-functions/logger";
 import { CallableRequest, HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import Stripe from "stripe";
-import { appUrl, emailApiKey, REGION, stripeSecretKey, stripeWebhookSecret, supportEmail, whatsappEnabled } from "./config";
-import { auth, db } from "./firebase";
+import { appUrl, emailApiKey, jwtSecret, REGION, stripeSecretKey, stripeWebhookSecret, supportEmail, whatsappEnabled } from "./config";
+import { db } from "./firebase";
 import { sendPaymentFailedEmail, sendPurchaseConfirmation, sendRefundEmail } from "./email";
 import { Course, Purchase, UserProfile } from "./models";
 import { createStripeClient } from "./stripeClient";
 import { sendWhatsappMessage } from "./whatsapp";
+
+export type ApiAuth = {
+  uid: string;
+  email?: string;
+  token?: any;
+};
+
+export type ApiRequest<T = any> = {
+  data: T;
+  auth?: ApiAuth;
+  rawRequest?: any;
+};
 
 type CreateCheckoutSessionInput = {
   userId?: string;
@@ -129,26 +140,7 @@ async function sendEmailForPurchase(
   }
 }
 
-export const createUserProfile = authV1.user().onCreate(async (user) => {
-  const userRef = db.collection("users").doc(user.uid);
-  const snapshot = await userRef.get();
-
-  if (snapshot.exists) {
-    return;
-  }
-
-  await userRef.set({
-    uid: user.uid,
-    name: user.displayName || "",
-    email: user.email || "",
-    phone: user.phoneNumber || null,
-    role: null,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-});
-
-export async function handleSyncUserProfile(request: CallableRequest<SyncUserProfileInput>) {
+export async function handleSyncUserProfile(request: ApiRequest<SyncUserProfileInput>) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
@@ -163,9 +155,7 @@ export async function handleSyncUserProfile(request: CallableRequest<SyncUserPro
     throw new HttpsError("invalid-argument", "name is required.");
   }
 
-  const validRoles: string[] = ["client", "customer", "student"];
-
-  const userRecord = await auth.getUser(authContext.uid);
+  const validRoles: string[] = ["client", "customer", "student", "seller"];
 
   const userRef = db.collection("users").doc(authContext.uid);
 
@@ -188,7 +178,7 @@ export async function handleSyncUserProfile(request: CallableRequest<SyncUserPro
     const profile = {
       uid: authContext.uid,
       name,
-      email: userRecord.email || authContext.token.email || "",
+      email: existingProfile?.email || authContext.email || "",
       phone: phone || null,
       role: roleToSet,
       updatedAt: FieldValue.serverTimestamp(),
@@ -207,14 +197,25 @@ export async function handleSyncUserProfile(request: CallableRequest<SyncUserPro
   return { ok: true };
 }
 
+function wrapOnCall<T>(handler: (req: ApiRequest<T>) => Promise<any>) {
+  return async (request: CallableRequest<T>) => {
+    const apiRequest: ApiRequest<T> = {
+      data: request.data,
+      auth: request.auth ? { uid: request.auth.uid, email: request.auth.token.email } : undefined,
+      rawRequest: request.rawRequest,
+    };
+    return handler(apiRequest);
+  };
+}
+
 export const syncUserProfile = onCall(
   {
     region: REGION,
   },
-  handleSyncUserProfile,
+  wrapOnCall(handleSyncUserProfile),
 );
 
-export async function handleCreateCheckoutSession(request: CallableRequest<CreateCheckoutSessionInput>) {
+export async function handleCreateCheckoutSession(request: ApiRequest<CreateCheckoutSessionInput>) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
@@ -227,12 +228,18 @@ export async function handleCreateCheckoutSession(request: CallableRequest<Creat
     throw new HttpsError("permission-denied", "You can only create checkout for your own user.");
   }
 
-  const [userRecord, courseSnapshot] = await Promise.all([
-    auth.getUser(userId),
+  const [userSnapshot, courseSnapshot] = await Promise.all([
+    db.collection("users").doc(userId).get(),
     db.collection("courses").doc(courseId).get(),
   ]);
 
-  if (!userRecord.email) {
+  if (!userSnapshot.exists) {
+    throw new HttpsError("not-found", "User was not found.");
+  }
+
+  const user = userSnapshot.data() as UserProfile;
+
+  if (!user.email) {
     throw new HttpsError("failed-precondition", "The user must have an email address.");
   }
 
@@ -262,7 +269,7 @@ export async function handleCreateCheckoutSession(request: CallableRequest<Creat
     status: "pending",
     amount: course.price,
     currency: course.currency.toLowerCase(),
-    customerEmail: userRecord.email,
+    customerEmail: user.email,
     createdAt: now,
     updatedAt: now,
     paidAt: null,
@@ -277,7 +284,7 @@ export async function handleCreateCheckoutSession(request: CallableRequest<Creat
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       client_reference_id: purchaseRef.id,
-      customer_email: userRecord.email,
+      customer_email: user.email,
       success_url: `${baseUrl}/learn/course/${encodeURIComponent(courseId)}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/learn/course/${encodeURIComponent(courseId)}?checkout=cancelled`,
       metadata: {
@@ -347,10 +354,10 @@ export const createCheckoutSession = onCall(
     region: REGION,
     secrets: [stripeSecretKey] as any,
   },
-  handleCreateCheckoutSession,
+  wrapOnCall(handleCreateCheckoutSession),
 );
 
-export async function handleGetMyCourseAccess(request: CallableRequest<unknown>) {
+export async function handleGetMyCourseAccess(request: ApiRequest<unknown>) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
@@ -402,7 +409,7 @@ export const getMyCourseAccess = onCall(
   {
     region: REGION,
   },
-  handleGetMyCourseAccess,
+  wrapOnCall(handleGetMyCourseAccess),
 );
 
 export async function handleStripeWebhook(request: any, response: any) {
@@ -602,7 +609,7 @@ export async function handleStripeWebhook(request: any, response: any) {
 export const stripeWebhook = onRequest(
   {
     region: REGION,
-    secrets: [stripeSecretKey, stripeWebhookSecret, emailApiKey] as any,
+    secrets: [stripeSecretKey, stripeWebhookSecret, emailApiKey, jwtSecret] as any,
   },
   handleStripeWebhook,
 );
@@ -615,7 +622,7 @@ type RequestProductInfoInput = {
   customerEmail?: string | null;
 };
 
-export async function handleRequestProductInfo(request: CallableRequest<RequestProductInfoInput>) {
+export async function handleRequestProductInfo(request: ApiRequest<RequestProductInfoInput>) {
   const data = (request.data || {}) as RequestProductInfoInput;
   const productId = assertString(data.productId, "productId");
   const productName = assertString(data.productName, "productName");
@@ -651,7 +658,7 @@ export async function handleRequestProductInfo(request: CallableRequest<RequestP
       updatedAt: now,
     });
 
-    const whatsappMessage = `Hola ${customerName}, has solicitado informaci�n sobre ${productName}. En breves se comunicar� un agente para brindarte m�s detalles. �Gracias!`;
+    const whatsappMessage = `Hola ${customerName}, has solicitado informacin sobre ${productName}. En breves se comunicar un agente para brindarte ms detalles.Gracias!`;
 
     const whatsappSuccess = await sendWhatsappMessage(phoneNumber, whatsappMessage);
 
@@ -667,7 +674,7 @@ export async function handleRequestProductInfo(request: CallableRequest<RequestP
     return {
       ok: true,
       leadId: leadRef.id,
-      message: "Lead creado. Se envi� confirmaci�n por WhatsApp.",
+      message: "Lead creado. Se envi confirmacin por WhatsApp.",
     };
   } catch (error) {
     logger.error("Failed to create lead request", error);
@@ -679,7 +686,7 @@ export const requestProductInfo = onCall(
   {
     region: REGION,
   },
-  handleRequestProductInfo,
+  wrapOnCall(handleRequestProductInfo),
 );
 
 type SendWhatsappMessageInput = {
@@ -687,7 +694,7 @@ type SendWhatsappMessageInput = {
   message?: string;
 };
 
-export async function handleSendWhatsappNotification(request: CallableRequest<SendWhatsappMessageInput>) {
+export async function handleSendWhatsappNotification(request: ApiRequest<SendWhatsappMessageInput>) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
@@ -723,5 +730,5 @@ export const sendWhatsappNotification = onCall(
   {
     region: REGION,
   },
-  handleSendWhatsappNotification,
+  wrapOnCall(handleSendWhatsappNotification),
 );

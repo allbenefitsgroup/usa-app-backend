@@ -16,15 +16,23 @@
   "dependencies": {
     "@open-wa/wa-automate": "^4.76.0",
     "@sendgrid/mail": "^8.1.4",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "express": "^4.22.2",
     "firebase-admin": "^13.0.0",
     "firebase-functions": "^6.0.1",
-    "stripe": "^17.5.0"
+    "jsonwebtoken": "^9.0.3",
+    "stripe": "^17.5.0",
+    "swagger-ui-express": "^5.0.1",
+    "yamljs": "^0.3.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/swagger-ui-express": "^4.1.8",
+    "@types/yamljs": "^0.2.34",
     "typescript": "^5.7.2"
   }
 }

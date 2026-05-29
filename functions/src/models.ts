@@ -1,6 +1,6 @@
 import { Timestamp } from "firebase-admin/firestore";
 
-export type UserRole = "client" | "customer" | "student";
+export type UserRole = "client" | "customer" | "student" | "seller";
 
 export type PurchaseStatus = "pending" | "paid" | "failed" | "refunded";
 export type CourseAccessStatus = "active" | "revoked";
@@ -11,6 +11,7 @@ export interface UserProfile {
   email: string;
   phone?: string | null;
   role?: UserRole | null;
+  passwordHash?: string | null;
   createdAt: Timestamp;
   updatedAt?: Timestamp;
 }

@@ -1,6 +1,8 @@
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
-import { auth } from "./firebase";
+import swaggerUi from "swagger-ui-express";
+import YAML from "yamljs";
+import path from "path";
 import {
   handleSyncUserProfile,
   handleCreateCheckoutSession,
@@ -8,7 +10,15 @@ import {
   handleStripeWebhook,
   handleRequestProductInfo,
   handleSendWhatsappNotification,
+  ApiRequest,
 } from "./index";
+import {
+  requireAuth,
+  optionalAuth,
+  handleRegister,
+  handleLogin,
+  handleGetMe,
+} from "./auth";
 
 const app = express();
 
@@ -25,36 +35,18 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 app.use(cors({ origin: true }));
 
-// Auth middleware for callable-like endpoints
-async function verifyAuth(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
-  }
-  try {
-    const token = authHeader.split("Bearer ")[1];
-    const decoded = await auth.verifyIdToken(token);
-    (req as any).authContext = { uid: decoded.uid, token: decoded };
-    next();
-  } catch (e) {
-    return res.status(401).json({ error: { message: "Invalid token", status: "UNAUTHENTICATED" } });
-  }
-}
-
 // Helper to wrap callable handlers for Express
-function wrapCallable(handler: (req: any) => Promise<any>, requiresAuth = true) {
+function wrapHandler<T>(handler: (req: ApiRequest<T>) => Promise<any>, requiresAuth = true) {
   return async (req: Request, res: Response) => {
     try {
-      if (requiresAuth) {
-        const authContext = (req as any).authContext;
-        if (!authContext) {
-          return res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
-        }
+      const authContext = (req as any).authContext;
+      if (requiresAuth && !authContext) {
+        return res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
       }
 
-      const request = {
+      const request: ApiRequest<T> = {
         data: req.body.data || req.body,
-        auth: (req as any).authContext || undefined,
+        auth: authContext || undefined,
         rawRequest: req,
       };
 
@@ -71,12 +63,17 @@ function wrapCallable(handler: (req: any) => Promise<any>, requiresAuth = true) 
   };
 }
 
-// Callable-like endpoints
-app.post("/api/syncUserProfile", verifyAuth, wrapCallable(handleSyncUserProfile));
-app.post("/api/createCheckoutSession", verifyAuth, wrapCallable(handleCreateCheckoutSession));
-app.post("/api/getMyCourseAccess", verifyAuth, wrapCallable(handleGetMyCourseAccess));
-app.post("/api/requestProductInfo", wrapCallable(handleRequestProductInfo, false));
-app.post("/api/sendWhatsappNotification", verifyAuth, wrapCallable(handleSendWhatsappNotification));
+// Auth endpoints
+app.post("/api/auth/register", (req, res, next) => { handleRegister(req, res).catch(next); });
+app.post("/api/auth/login", (req, res, next) => { handleLogin(req, res).catch(next); });
+app.get("/api/auth/me", requireAuth, (req, res, next) => { handleGetMe(req, res).catch(next); });
+
+// Protected business endpoints
+app.post("/api/syncUserProfile", requireAuth, wrapHandler(handleSyncUserProfile));
+app.post("/api/createCheckoutSession", requireAuth, wrapHandler(handleCreateCheckoutSession));
+app.post("/api/getMyCourseAccess", requireAuth, wrapHandler(handleGetMyCourseAccess));
+app.post("/api/requestProductInfo", optionalAuth, wrapHandler(handleRequestProductInfo, false));
+app.post("/api/sendWhatsappNotification", requireAuth, wrapHandler(handleSendWhatsappNotification));
 
 // Stripe webhook (raw body)
 app.post(stripeWebhookPath, async (req: Request, res: Response) => {
@@ -88,12 +85,20 @@ app.post(stripeWebhookPath, async (req: Request, res: Response) => {
   }
 });
 
+// Swagger docs
+const swaggerDocument = YAML.load(path.join(__dirname, "swagger.yaml"));
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
 // Health check
 app.get("/", (_req: Request, res: Response) => {
   res.json({ status: "ok", service: "usa-app-backend" });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+if (!process.env.FUNCTIONS_EMULATOR && !process.env.K_SERVICE) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+export default app;
