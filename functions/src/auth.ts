@@ -158,8 +158,6 @@ export async function handleRegister(req: Request, res: Response) {
 
     const uid = generateUid();
     const passwordHash = await hashPassword(password);
-    console.log("[DEBUG REGISTER] Hash generated:", passwordHash?.substring(0, 30) + "...");
-    console.log("[DEBUG REGISTER] Hash length:", passwordHash?.length);
     const now = new Date().toISOString();
 
     await ddb.send(
@@ -203,24 +201,18 @@ export async function handleRegister(req: Request, res: Response) {
 export async function handleLogin(req: Request, res: Response) {
   try {
     const { email, password } = req.body;
-    console.log("[DEBUG LOGIN] Request body:", JSON.stringify(req.body));
-    console.log("[DEBUG LOGIN] Email received:", email);
-    console.log("[DEBUG LOGIN] Password received:", password ? "[PRESENT]" : "[MISSING]");
 
     if (!email || typeof email !== "string") {
-      console.log("[DEBUG LOGIN] FAIL: email missing or invalid type");
       res.status(400).json({ error: { message: "email is required.", status: "INVALID_ARGUMENT" } });
       return;
     }
     if (!password || typeof password !== "string") {
-      console.log("[DEBUG LOGIN] FAIL: password missing or invalid type");
       res.status(400).json({ error: { message: "password is required.", status: "INVALID_ARGUMENT" } });
       return;
     }
 
     // Find user by email
     const searchEmail = email.toLowerCase().trim();
-    console.log("[DEBUG LOGIN] Searching for email:", searchEmail);
     
     const scanResult = await ddb.send(
       new ScanCommand({
@@ -228,26 +220,21 @@ export async function handleLogin(req: Request, res: Response) {
       })
     );
 
-    console.log("[DEBUG LOGIN] Total items in table:", scanResult.Items?.length || 0);
-    
     const user = scanResult.Items?.find((item: any) => item.email === searchEmail);
-    console.log("[DEBUG LOGIN] User found by manual filter:", user ? "YES" : "NO");
 
     if (!user) {
-      console.log("[DEBUG LOGIN] FAIL: User not found in DB");
       res.status(401).json({ error: { message: "Invalid email or password.", status: "UNAUTHENTICATED" } });
       return;
     }
 
-    console.log("[DEBUG LOGIN] Hash from DB:", user.passwordHash?.substring(0, 30) + "...");
-    console.log("[DEBUG LOGIN] Hash length:", user.passwordHash?.length);
-    console.log("[DEBUG LOGIN] Password input length:", password?.length);
-    
+    if (!user.passwordHash) {
+      res.status(401).json({ error: { message: "Invalid email or password.", status: "UNAUTHENTICATED" } });
+      return;
+    }
+
     const valid = await verifyPassword(password, user.passwordHash);
-    console.log("[DEBUG LOGIN] verifyPassword result:", valid);
     
     if (!valid) {
-      console.log("[DEBUG LOGIN] FAIL: Password mismatch");
       res.status(401).json({ error: { message: "Invalid email or password.", status: "UNAUTHENTICATED" } });
       return;
     }
