@@ -2,10 +2,9 @@ import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { promisify } from "util";
 import jwt from "jsonwebtoken";
-import { FieldValue } from "firebase-admin/firestore";
-import { assertFirebaseAdminConfigured, db } from "./firebase";
+import { GetCommand, PutCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { ddb, USERS_TABLE } from "./dynamodb";
 import { jwtSecret } from "./config";
-import { UserProfile } from "./models";
 
 export type AuthContext = {
   uid: string;
@@ -81,8 +80,6 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
 
 export async function handleRegister(req: Request, res: Response) {
   try {
-    assertFirebaseAdminConfigured();
-
     const { name, email, password, phone, role } = req.body;
 
     if (!name || typeof name !== "string" || name.trim().length === 0) {
@@ -105,26 +102,40 @@ export async function handleRegister(req: Request, res: Response) {
       return;
     }
 
-    const existing = await db.collection("users").where("email", "==", email.toLowerCase().trim()).limit(1).get();
-    if (!existing.empty) {
+    // Check if email already exists
+    const scanResult = await ddb.send(
+      new ScanCommand({
+        TableName: USERS_TABLE,
+        FilterExpression: "email = :email",
+        ExpressionAttributeValues: { ":email": email.toLowerCase().trim() },
+        Limit: 1,
+      })
+    );
+
+    if (scanResult.Items && scanResult.Items.length > 0) {
       res.status(409).json({ error: { message: "An account with this email already exists.", status: "ALREADY_EXISTS" } });
       return;
     }
 
     const uid = generateUid();
     const passwordHash = await hashPassword(password);
-    const now = FieldValue.serverTimestamp();
+    const now = new Date().toISOString();
 
-    await db.collection("users").doc(uid).set({
-      uid,
-      name: name.trim(),
-      email: email.toLowerCase().trim(),
-      phone: phone ? String(phone).trim() : null,
-      role: roleInput,
-      passwordHash,
-      createdAt: now,
-      updatedAt: now,
-    });
+    await ddb.send(
+      new PutCommand({
+        TableName: USERS_TABLE,
+        Item: {
+          uid,
+          name: name.trim(),
+          email: email.toLowerCase().trim(),
+          phone: phone ? String(phone).trim() : null,
+          role: roleInput,
+          passwordHash,
+          createdAt: now,
+          updatedAt: now,
+        },
+      })
+    );
 
     const token = signToken({ uid, email: email.toLowerCase().trim(), role: roleInput });
 
@@ -150,8 +161,6 @@ export async function handleRegister(req: Request, res: Response) {
 
 export async function handleLogin(req: Request, res: Response) {
   try {
-    assertFirebaseAdminConfigured();
-
     const { email, password } = req.body;
 
     if (!email || typeof email !== "string") {
@@ -163,14 +172,22 @@ export async function handleLogin(req: Request, res: Response) {
       return;
     }
 
-    const snapshot = await db.collection("users").where("email", "==", email.toLowerCase().trim()).limit(1).get();
-    if (snapshot.empty) {
+    // Find user by email
+    const scanResult = await ddb.send(
+      new ScanCommand({
+        TableName: USERS_TABLE,
+        FilterExpression: "email = :email",
+        ExpressionAttributeValues: { ":email": email.toLowerCase().trim() },
+        Limit: 1,
+      })
+    );
+
+    if (!scanResult.Items || scanResult.Items.length === 0) {
       res.status(401).json({ error: { message: "Invalid email or password.", status: "UNAUTHENTICATED" } });
       return;
     }
 
-    const userDoc = snapshot.docs[0];
-    const user = userDoc.data() as UserProfile;
+    const user = scanResult.Items[0] as any;
 
     if (!user.passwordHash) {
       res.status(401).json({ error: { message: "Invalid email or password.", status: "UNAUTHENTICATED" } });
@@ -206,21 +223,25 @@ export async function handleLogin(req: Request, res: Response) {
 
 export async function handleGetMe(req: Request, res: Response) {
   try {
-    assertFirebaseAdminConfigured();
-
     const authContext = (req as any).authContext as AuthContext | undefined;
     if (!authContext) {
       res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
       return;
     }
 
-    const doc = await db.collection("users").doc(authContext.uid).get();
-    if (!doc.exists) {
+    const result = await ddb.send(
+      new GetCommand({
+        TableName: USERS_TABLE,
+        Key: { uid: authContext.uid },
+      })
+    );
+
+    if (!result.Item) {
       res.status(404).json({ error: { message: "User not found.", status: "NOT_FOUND" } });
       return;
     }
 
-    const user = doc.data() as UserProfile;
+    const user = result.Item;
     res.json({
       uid: user.uid,
       name: user.name,

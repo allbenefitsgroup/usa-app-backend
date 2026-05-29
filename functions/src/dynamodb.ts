@@ -1,0 +1,9 @@
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+
+const REGION = process.env.AWS_REGION || "us-east-2";
+
+const client = new DynamoDBClient({ region: REGION });
+export const ddb = DynamoDBDocumentClient.from(client);
+
+export const USERS_TABLE = process.env.DYNAMODB_USERS_TABLE || "usa-users";
