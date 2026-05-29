@@ -1,6 +1,6 @@
 import { defineSecret, defineString } from "firebase-functions/params";
 
-const isFirebaseFunctions = !!process.env.FUNCTIONS_EMULATOR || !!process.env.K_SERVICE || !!process.env.GOOGLE_CLOUD_PROJECT;
+const isFirebaseFunctions = !!process.env.FUNCTIONS_EMULATOR || !!process.env.K_SERVICE;
 
 function createSecret(name: string) {
   if (isFirebaseFunctions) {

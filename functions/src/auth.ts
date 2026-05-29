@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { promisify } from "util";
 import jwt from "jsonwebtoken";
 import { FieldValue } from "firebase-admin/firestore";
-import { db } from "./firebase";
+import { assertFirebaseAdminConfigured, db } from "./firebase";
 import { jwtSecret } from "./config";
 import { UserProfile } from "./models";
 
@@ -81,6 +81,8 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
 
 export async function handleRegister(req: Request, res: Response) {
   try {
+    assertFirebaseAdminConfigured();
+
     const { name, email, password, phone, role } = req.body;
 
     if (!name || typeof name !== "string" || name.trim().length === 0) {
@@ -148,6 +150,8 @@ export async function handleRegister(req: Request, res: Response) {
 
 export async function handleLogin(req: Request, res: Response) {
   try {
+    assertFirebaseAdminConfigured();
+
     const { email, password } = req.body;
 
     if (!email || typeof email !== "string") {
@@ -202,6 +206,8 @@ export async function handleLogin(req: Request, res: Response) {
 
 export async function handleGetMe(req: Request, res: Response) {
   try {
+    assertFirebaseAdminConfigured();
+
     const authContext = (req as any).authContext as AuthContext | undefined;
     if (!authContext) {
       res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
