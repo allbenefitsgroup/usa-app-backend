@@ -19,6 +19,7 @@ import {
   handleRegister,
   handleLogin,
   handleGetMe,
+  handleLogout,
 } from "./auth";
 
 const app = express();
@@ -67,6 +68,7 @@ function wrapHandler<T>(handler: (req: ApiRequest<T>) => Promise<any>, requiresA
 // Auth endpoints
 app.post("/api/auth/register", (req, res, next) => { handleRegister(req, res).catch(next); });
 app.post("/api/auth/login", (req, res, next) => { handleLogin(req, res).catch(next); });
+app.post("/api/auth/logout", handleLogout);
 app.get("/api/auth/me", requireAuth, (req, res, next) => { handleGetMe(req, res).catch(next); });
 
 // Protected business endpoints

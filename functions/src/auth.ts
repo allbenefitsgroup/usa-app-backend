@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { promisify } from "util";
 import jwt from "jsonwebtoken";
 import { GetCommand, PutCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
-import { ddb, USERS_TABLE } from "./dynamodb";
+import { ddb, USERS_TABLE, REVOKED_TOKENS_TABLE } from "./dynamodb";
 import { jwtSecret } from "./config";
 
 export type AuthContext = {
@@ -48,6 +48,32 @@ export function verifyToken(token: string): AuthContext {
   return jwt.verify(token, secret) as AuthContext;
 }
 
+export async function isTokenRevoked(token: string): Promise<boolean> {
+  try {
+    const result = await ddb.send(
+      new GetCommand({
+        TableName: REVOKED_TOKENS_TABLE,
+        Key: { token },
+      })
+    );
+    return !!result.Item;
+  } catch {
+    return false;
+  }
+}
+
+export async function revokeToken(token: string): Promise<void> {
+  await ddb.send(
+    new PutCommand({
+      TableName: REVOKED_TOKENS_TABLE,
+      Item: {
+        token,
+        revokedAt: new Date().toISOString(),
+      },
+    })
+  );
+}
+
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -56,7 +82,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
   try {
     const token = authHeader.split("Bearer ")[1];
+
     const decoded = verifyToken(token);
+
+    if (await isTokenRevoked(token)) {
+      res.status(401).json({ error: { message: "Token has been revoked", status: "UNAUTHENTICATED" } });
+      return;
+    }
+
     (req as any).authContext = decoded;
     next();
   } catch (e) {
@@ -66,15 +99,19 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
 export async function optionalAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
-  console.log("[optionalAuth] Path:", req.path, "| Auth header:", authHeader ? "present" : "missing");
   if (authHeader && authHeader.startsWith("Bearer ")) {
     try {
       const token = authHeader.split("Bearer ")[1];
       const decoded = verifyToken(token);
+
+      if (await isTokenRevoked(token)) {
+        // ignore revoked optional token
+        return next();
+      }
+
       (req as any).authContext = decoded;
-      console.log("[optionalAuth] Token valid for uid:", decoded.uid);
-    } catch (e: any) {
-      console.log("[optionalAuth] Token invalid:", e.message);
+    } catch {
+      // ignore invalid optional token
     }
   }
   next();
@@ -253,6 +290,34 @@ export async function handleGetMe(req: Request, res: Response) {
     });
   } catch (error: any) {
     console.error("GetMe error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: { message: error.message || "Internal server error", status: "INTERNAL" } });
+    }
+  }
+}
+
+export async function handleLogout(req: Request, res: Response) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
+      return;
+    }
+
+    const token = authHeader.split("Bearer ")[1];
+
+    try {
+      verifyToken(token); // ensure token is valid before revoking
+    } catch {
+      res.status(401).json({ error: { message: "Invalid token", status: "UNAUTHENTICATED" } });
+      return;
+    }
+
+    await revokeToken(token);
+
+    res.json({ ok: true, message: "Logged out successfully" });
+  } catch (error: any) {
+    console.error("Logout error:", error);
     if (!res.headersSent) {
       res.status(500).json({ error: { message: error.message || "Internal server error", status: "INTERNAL" } });
     }
