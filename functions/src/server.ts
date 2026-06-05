@@ -4,6 +4,7 @@ import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
 import path from "path";
+import multer from "multer";
 import {
   handleSyncUserProfile,
   handleCreateCheckoutSession,
@@ -28,6 +29,7 @@ import {
   handleGetMe,
   handleLogout,
 } from "./auth";
+import { uploadImageToS3 } from "./s3Upload";
 
 const app = express();
 
@@ -53,6 +55,8 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
   };
   next();
 });
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 // Admin middleware: requires auth and role must be seller or admin
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
@@ -135,8 +139,79 @@ app.get("/api/admin/recommendations", requireAuth, requireAdmin, async (_req: Re
     res.status(500).json({ error: { message: error.message || "Internal error", status: "INTERNAL" } });
   }
 });
-app.post("/api/admin/recommendations", wrapHandler(handleCreateRecommendation, false));
-app.put("/api/admin/recommendations/:id", requireAuth, requireAdmin, wrapHandler(handleUpdateRecommendation));
+app.post("/api/admin/recommendations", upload.single("image"), async (req: Request, res: Response) => {
+  try {
+    let imageUrl: string | null = null;
+    if (req.file) {
+      imageUrl = await uploadImageToS3(req.file.buffer, req.file.originalname, req.file.mimetype);
+    }
+
+    const body = req.body;
+    const request: ApiRequest<any> = {
+      data: {
+        title: body.title,
+        subtitle: body.subtitle,
+        type: body.type,
+        externalUrl: body.externalUrl,
+        imageUrl: imageUrl || body.imageUrl || null,
+        color: body.color,
+        icon: body.icon,
+        ctaLabel: body.ctaLabel,
+        ctaLink: body.ctaLink,
+        active: body.active === "true" || body.active === true ? true : false,
+      },
+      auth: undefined,
+      rawRequest: req,
+    };
+
+    const result = await handleCreateRecommendation(request);
+    res.json({ result });
+  } catch (error: any) {
+    console.error("Create recommendation error:", error);
+    if (error.code && error.message) {
+      res.json({ error: { message: error.message, status: error.code } });
+    } else {
+      res.status(500).json({ error: { message: error.message || "Internal error", status: "INTERNAL" } });
+    }
+  }
+});
+app.put("/api/admin/recommendations/:id", requireAuth, requireAdmin, upload.single("image"), async (req: Request, res: Response) => {
+  try {
+    let imageUrl: string | null = null;
+    if (req.file) {
+      imageUrl = await uploadImageToS3(req.file.buffer, req.file.originalname, req.file.mimetype);
+    }
+
+    const body = req.body;
+    const request: ApiRequest<any> = {
+      data: {
+        id: req.params.id,
+        title: body.title,
+        subtitle: body.subtitle,
+        type: body.type,
+        externalUrl: body.externalUrl,
+        imageUrl: imageUrl || body.imageUrl || undefined,
+        color: body.color,
+        icon: body.icon,
+        ctaLabel: body.ctaLabel,
+        ctaLink: body.ctaLink,
+        active: body.active === "true" || body.active === true ? true : body.active === "false" || body.active === false ? false : undefined,
+      },
+      auth: (req as any).authContext || undefined,
+      rawRequest: req,
+    };
+
+    const result = await handleUpdateRecommendation(request);
+    res.json({ result });
+  } catch (error: any) {
+    console.error("Update recommendation error:", error);
+    if (error.code && error.message) {
+      res.json({ error: { message: error.message, status: error.code } });
+    } else {
+      res.status(500).json({ error: { message: error.message || "Internal error", status: "INTERNAL" } });
+    }
+  }
+});
 app.delete("/api/admin/recommendations/:id", requireAuth, requireAdmin, wrapHandler(handleDeleteRecommendation));
 app.put("/api/admin/recommendations/reorder", requireAuth, requireAdmin, wrapHandler(handleReorderRecommendations));
 
