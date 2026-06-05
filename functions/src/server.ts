@@ -11,6 +11,7 @@ import {
   handleStripeWebhook,
   handleRequestProductInfo,
   handleSendWhatsappNotification,
+  handleGetRecommendations,
   ApiRequest,
 } from "./index";
 import {
@@ -77,6 +78,22 @@ app.post("/api/createCheckoutSession", requireAuth, wrapHandler(handleCreateChec
 app.post("/api/getMyCourseAccess", requireAuth, wrapHandler(handleGetMyCourseAccess));
 app.post("/api/requestProductInfo", optionalAuth, wrapHandler(handleRequestProductInfo, false));
 app.post("/api/sendWhatsappNotification", requireAuth, wrapHandler(handleSendWhatsappNotification));
+
+// Public recommendations (rotating tips)
+app.get("/api/recommendations", async (_req: Request, res: Response) => {
+  try {
+    const result = await handleGetRecommendations();
+    res.json({ result });
+  } catch (error: any) {
+    console.error("Recommendations error:", error);
+    res.status(500).json({
+      error: {
+        message: error.message || "Failed to load recommendations",
+        status: "INTERNAL",
+      },
+    });
+  }
+});
 
 // Stripe webhook (raw body)
 app.post(stripeWebhookPath, async (req: Request, res: Response) => {

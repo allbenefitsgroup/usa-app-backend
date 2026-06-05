@@ -100,3 +100,13 @@ export interface LeadRequest {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
+
+export interface Recommendation {
+  id: string;
+  title: string;
+  subtitle: string;
+  color?: string | null;
+  icon?: string | null;
+  ctaLabel?: string | null;
+  ctaLink?: string | null;
+}
