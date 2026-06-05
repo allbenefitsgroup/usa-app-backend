@@ -8,8 +8,8 @@ import { sendPaymentFailedEmail, sendPurchaseConfirmation, sendRefundEmail } fro
 import { Course, Purchase, UserProfile } from "./models";
 import { createStripeClient } from "./stripeClient";
 import { sendWhatsappMessage } from "./whatsapp";
-import { ddb, LEADS_TABLE, USERS_TABLE } from "./dynamodb";
-import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import { ddb, LEADS_TABLE, USERS_TABLE, RECOMMENDATIONS_TABLE } from "./dynamodb";
+import { GetCommand, PutCommand, ScanCommand, UpdateCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 import { generateUid } from "./auth";
 
 export type ApiAuth = {
@@ -902,7 +902,7 @@ function getSixHourBlock(date: Date): number {
 export async function handleGetRecommendations() {
   const now = new Date();
 
-  // Try to load active recommendations from Firestore first (social ads, promos, etc.)
+  // Try to load active recommendations from DynamoDB first
   let items: Array<{
     id: string;
     title: string;
@@ -917,12 +917,29 @@ export async function handleGetRecommendations() {
   }> = [];
 
   try {
-    const snapshot = await db.collection("recommendations").where("active", "==", true).orderBy("order", "asc").get();
-    if (!snapshot.empty) {
-      items = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
+    let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+    const dbItems: any[] = [];
+
+    do {
+      const scanResult: any = await ddb.send(
+        new ScanCommand({
+          TableName: RECOMMENDATIONS_TABLE,
+          FilterExpression: "active = :active",
+          ExpressionAttributeValues: { ":active": true },
+          ExclusiveStartKey: lastEvaluatedKey,
+        })
+      );
+
+      if (scanResult.Items) {
+        dbItems.push(...scanResult.Items);
+      }
+      lastEvaluatedKey = scanResult.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
+
+    if (dbItems.length > 0) {
+      items = dbItems
+        .map((data) => ({
+          id: String(data.id || ""),
           title: typeof data.title === "string" ? data.title : "",
           subtitle: typeof data.subtitle === "string" ? data.subtitle : "",
           type: typeof data.type === "string" ? data.type : "general",
@@ -932,11 +949,12 @@ export async function handleGetRecommendations() {
           icon: data.icon || null,
           ctaLabel: data.ctaLabel || null,
           ctaLink: data.ctaLink || null,
-        };
-      });
+          order: typeof data.order === "number" ? data.order : 0,
+        }))
+        .sort((a, b) => a.order - b.order);
     }
   } catch (err) {
-    logger.warn("Failed to load recommendations from Firestore, using defaults.", err);
+    logger.warn("Failed to load recommendations from DynamoDB, using defaults.", err);
   }
 
   const source =
@@ -992,28 +1010,42 @@ export const getRecommendations = onCall(
   },
 );
 
-// Admin CRUD for recommendations
+// Admin CRUD for recommendations using DynamoDB
 export async function handleListRecommendations() {
-  const snapshot = await db.collection("recommendations").orderBy("order", "asc").get();
+  let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+  const dbItems: any[] = [];
+
+  do {
+    const scanResult: any = await ddb.send(
+      new ScanCommand({
+        TableName: RECOMMENDATIONS_TABLE,
+        ExclusiveStartKey: lastEvaluatedKey,
+      })
+    );
+    if (scanResult.Items) {
+      dbItems.push(...scanResult.Items);
+    }
+    lastEvaluatedKey = scanResult.LastEvaluatedKey;
+  } while (lastEvaluatedKey);
+
+  dbItems.sort((a, b) => (typeof a.order === "number" ? a.order : 0) - (typeof b.order === "number" ? b.order : 0));
+
   return {
-    recommendations: snapshot.docs.map((doc) => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        title: data.title || "",
-        subtitle: data.subtitle || "",
-        type: data.type || "general",
-        externalUrl: data.externalUrl || null,
-        imageUrl: data.imageUrl || null,
-        color: data.color || null,
-        icon: data.icon || null,
-        ctaLabel: data.ctaLabel || null,
-        ctaLink: data.ctaLink || null,
-        active: !!data.active,
-        order: typeof data.order === "number" ? data.order : 0,
-        createdAt: timestampToMillis(data.createdAt),
-      };
-    }),
+    recommendations: dbItems.map((data) => ({
+      id: String(data.id || ""),
+      title: data.title || "",
+      subtitle: data.subtitle || "",
+      type: data.type || "general",
+      externalUrl: data.externalUrl || null,
+      imageUrl: data.imageUrl || null,
+      color: data.color || null,
+      icon: data.icon || null,
+      ctaLabel: data.ctaLabel || null,
+      ctaLink: data.ctaLink || null,
+      active: !!data.active,
+      order: typeof data.order === "number" ? data.order : 0,
+      createdAt: data.createdAt || null,
+    })),
   };
 }
 
@@ -1048,30 +1080,52 @@ export async function handleCreateRecommendation(request: ApiRequest<CreateRecom
     throw new HttpsError("invalid-argument", `type must be one of: ${validTypes.join(", ")}.`);
   }
 
-  // Assign order at the end (highest existing + 1) so new items appear last
-  const countSnap = await db.collection("recommendations").count().get();
-  const nextOrder = (countSnap.data().count || 0) + 1;
+  // Assign order at the end so new items appear last
+  let nextOrder = 1;
+  try {
+    let lastKey: Record<string, any> | undefined = undefined;
+    let count = 0;
+    do {
+      const scanResult: any = await ddb.send(
+        new ScanCommand({
+          TableName: RECOMMENDATIONS_TABLE,
+          ExclusiveStartKey: lastKey,
+        })
+      );
+      count += (scanResult.Items || []).length;
+      lastKey = scanResult.LastEvaluatedKey;
+    } while (lastKey);
+    nextOrder = count + 1;
+  } catch {
+    // fallback to 1 if scan fails
+  }
 
-  const docRef = db.collection("recommendations").doc();
-  const now = FieldValue.serverTimestamp();
+  const id = generateUid();
+  const now = new Date().toISOString();
 
-  await docRef.set({
-    title,
-    subtitle,
-    type,
-    externalUrl: data.externalUrl || null,
-    imageUrl: data.imageUrl || null,
-    color: data.color || null,
-    icon: data.icon || null,
-    ctaLabel: data.ctaLabel || null,
-    ctaLink: data.ctaLink || null,
-    active: typeof data.active === "boolean" ? data.active : true,
-    order: nextOrder,
-    createdAt: now,
-    updatedAt: now,
-  });
+  await ddb.send(
+    new PutCommand({
+      TableName: RECOMMENDATIONS_TABLE,
+      Item: {
+        id,
+        title,
+        subtitle,
+        type,
+        externalUrl: data.externalUrl || null,
+        imageUrl: data.imageUrl || null,
+        color: data.color || null,
+        icon: data.icon || null,
+        ctaLabel: data.ctaLabel || null,
+        ctaLink: data.ctaLink || null,
+        active: typeof data.active === "boolean" ? data.active : true,
+        order: nextOrder,
+        createdAt: now,
+        updatedAt: now,
+      },
+    })
+  );
 
-  return { ok: true, id: docRef.id };
+  return { ok: true, id };
 }
 
 type UpdateRecommendationInput = {
@@ -1092,34 +1146,93 @@ export async function handleUpdateRecommendation(request: ApiRequest<UpdateRecom
   const data = request.data || {};
   const id = assertString(data.id, "id");
 
-  const docRef = db.collection("recommendations").doc(id);
-  const snapshot = await docRef.get();
-  if (!snapshot.exists) {
+  // Check existence
+  const getResult = await ddb.send(
+    new GetCommand({
+      TableName: RECOMMENDATIONS_TABLE,
+      Key: { id },
+    })
+  );
+  if (!getResult.Item) {
     throw new HttpsError("not-found", "Recommendation not found.");
   }
 
-  const payload: Record<string, any> = {
-    updatedAt: FieldValue.serverTimestamp(),
-  };
+  const updateExpressions: string[] = [];
+  const expressionAttributeNames: Record<string, string> = {};
+  const expressionAttributeValues: Record<string, any> = {};
 
-  if (typeof data.title === "string") payload.title = data.title.trim();
-  if (typeof data.subtitle === "string") payload.subtitle = data.subtitle.trim();
+  if (typeof data.title === "string") {
+    updateExpressions.push("#t = :t");
+    expressionAttributeNames["#t"] = "title";
+    expressionAttributeValues[":t"] = data.title.trim();
+  }
+  if (typeof data.subtitle === "string") {
+    updateExpressions.push("#s = :s");
+    expressionAttributeNames["#s"] = "subtitle";
+    expressionAttributeValues[":s"] = data.subtitle.trim();
+  }
   if (typeof data.type === "string") {
     const validTypes = ["instagram", "youtube", "general"];
     if (!validTypes.includes(data.type)) {
       throw new HttpsError("invalid-argument", `type must be one of: ${validTypes.join(", ")}.`);
     }
-    payload.type = data.type.trim();
+    updateExpressions.push("#ty = :ty");
+    expressionAttributeNames["#ty"] = "type";
+    expressionAttributeValues[":ty"] = data.type.trim();
   }
-  if (data.externalUrl !== undefined) payload.externalUrl = data.externalUrl;
-  if (data.imageUrl !== undefined) payload.imageUrl = data.imageUrl;
-  if (data.color !== undefined) payload.color = data.color;
-  if (data.icon !== undefined) payload.icon = data.icon;
-  if (data.ctaLabel !== undefined) payload.ctaLabel = data.ctaLabel;
-  if (data.ctaLink !== undefined) payload.ctaLink = data.ctaLink;
-  if (typeof data.active === "boolean") payload.active = data.active;
+  if (data.externalUrl !== undefined) {
+    updateExpressions.push("#eu = :eu");
+    expressionAttributeNames["#eu"] = "externalUrl";
+    expressionAttributeValues[":eu"] = data.externalUrl;
+  }
+  if (data.imageUrl !== undefined) {
+    updateExpressions.push("#iu = :iu");
+    expressionAttributeNames["#iu"] = "imageUrl";
+    expressionAttributeValues[":iu"] = data.imageUrl;
+  }
+  if (data.color !== undefined) {
+    updateExpressions.push("#c = :c");
+    expressionAttributeNames["#c"] = "color";
+    expressionAttributeValues[":c"] = data.color;
+  }
+  if (data.icon !== undefined) {
+    updateExpressions.push("#i = :i");
+    expressionAttributeNames["#i"] = "icon";
+    expressionAttributeValues[":i"] = data.icon;
+  }
+  if (data.ctaLabel !== undefined) {
+    updateExpressions.push("#cl = :cl");
+    expressionAttributeNames["#cl"] = "ctaLabel";
+    expressionAttributeValues[":cl"] = data.ctaLabel;
+  }
+  if (data.ctaLink !== undefined) {
+    updateExpressions.push("#clink = :clink");
+    expressionAttributeNames["#clink"] = "ctaLink";
+    expressionAttributeValues[":clink"] = data.ctaLink;
+  }
+  if (typeof data.active === "boolean") {
+    updateExpressions.push("#a = :a");
+    expressionAttributeNames["#a"] = "active";
+    expressionAttributeValues[":a"] = data.active;
+  }
 
-  await docRef.update(payload);
+  if (updateExpressions.length === 0) {
+    return { ok: true, id };
+  }
+
+  updateExpressions.push("updatedAt = :now");
+  expressionAttributeValues[":now"] = new Date().toISOString();
+
+  await ddb.send(
+    new UpdateCommand({
+      TableName: RECOMMENDATIONS_TABLE,
+      Key: { id },
+      UpdateExpression: "set " + updateExpressions.join(", "),
+      ExpressionAttributeNames: expressionAttributeNames,
+      ExpressionAttributeValues: expressionAttributeValues,
+    })
+  );
+
   return { ok: true, id };
 }
 
@@ -1127,13 +1240,24 @@ export async function handleDeleteRecommendation(request: ApiRequest<{ id?: stri
   const data = request.data || {};
   const id = assertString(data.id, "id");
 
-  const docRef = db.collection("recommendations").doc(id);
-  const snapshot = await docRef.get();
-  if (!snapshot.exists) {
+  // Check existence
+  const getResult = await ddb.send(
+    new GetCommand({
+      TableName: RECOMMENDATIONS_TABLE,
+      Key: { id },
+    })
+  );
+  if (!getResult.Item) {
     throw new HttpsError("not-found", "Recommendation not found.");
   }
 
-  await docRef.delete();
+  await ddb.send(
+    new DeleteCommand({
+      TableName: RECOMMENDATIONS_TABLE,
+      Key: { id },
+    })
+  );
+
   return { ok: true, id };
 }
 
@@ -1150,8 +1274,7 @@ export async function handleReorderRecommendations(request: ApiRequest<ReorderRe
     throw new HttpsError("invalid-argument", "items array is required.");
   }
 
-  const batch = db.batch();
-  const now = FieldValue.serverTimestamp();
+  const now = new Date().toISOString();
 
   for (const item of items) {
     if (!item.id || typeof item.id !== "string") {
@@ -1160,10 +1283,17 @@ export async function handleReorderRecommendations(request: ApiRequest<ReorderRe
     if (typeof item.order !== "number") {
       throw new HttpsError("invalid-argument", "Each item must have a valid order number.");
     }
-    const ref = db.collection("recommendations").doc(item.id);
-    batch.update(ref, { order: item.order, updatedAt: now });
+
+    await ddb.send(
+      new UpdateCommand({
+        TableName: RECOMMENDATIONS_TABLE,
+        Key: { id: item.id },
+        UpdateExpression: "set #o = :o, updatedAt = :now",
+        ExpressionAttributeNames: { "#o": "order" },
+        ExpressionAttributeValues: { ":o": item.order, ":now": now },
+      })
+    );
   }
 
-  await batch.commit();
   return { ok: true, updated: items.length };
 }
