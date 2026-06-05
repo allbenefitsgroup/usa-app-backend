@@ -122,7 +122,7 @@ app.get("/api/admin/recommendations", requireAuth, requireAdmin, async (_req: Re
     res.status(500).json({ error: { message: error.message || "Internal error", status: "INTERNAL" } });
   }
 });
-app.post("/api/admin/recommendations", requireAuth, requireAdmin, wrapHandler(handleCreateRecommendation));
+app.post("/api/admin/recommendations", wrapHandler(handleCreateRecommendation, false));
 app.put("/api/admin/recommendations/:id", requireAuth, requireAdmin, wrapHandler(handleUpdateRecommendation));
 app.delete("/api/admin/recommendations/:id", requireAuth, requireAdmin, wrapHandler(handleDeleteRecommendation));
 app.put("/api/admin/recommendations/reorder", requireAuth, requireAdmin, wrapHandler(handleReorderRecommendations));
