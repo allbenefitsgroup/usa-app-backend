@@ -44,6 +44,16 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 app.use(cors({ origin: true }));
 
+// Force UTF-8 charset on JSON responses to avoid encoding issues
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  const originalJson = res.json.bind(res);
+  res.json = function (body: any) {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    return originalJson(body);
+  };
+  next();
+});
+
 // Admin middleware: requires auth and role must be seller or admin
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const authContext = (req as any).authContext;
