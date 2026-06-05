@@ -117,6 +117,30 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
   next();
 }
 
+async function findUserByEmail(email: string): Promise<Record<string, any> | null> {
+  const searchEmail = email.toLowerCase().trim();
+  let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+
+  do {
+    const scanResult: any = await ddb.send(
+      new ScanCommand({
+        TableName: USERS_TABLE,
+        FilterExpression: "email = :email",
+        ExpressionAttributeValues: { ":email": searchEmail },
+        ExclusiveStartKey: lastEvaluatedKey,
+      })
+    );
+
+    if (scanResult.Items && scanResult.Items.length > 0) {
+      return scanResult.Items[0];
+    }
+
+    lastEvaluatedKey = scanResult.LastEvaluatedKey;
+  } while (lastEvaluatedKey);
+
+  return null;
+}
+
 export async function handleRegister(req: Request, res: Response) {
   try {
     const { name, email, password, phone, role } = req.body;
@@ -142,16 +166,9 @@ export async function handleRegister(req: Request, res: Response) {
     }
 
     // Check if email already exists
-    const scanResult = await ddb.send(
-      new ScanCommand({
-        TableName: USERS_TABLE,
-        FilterExpression: "email = :email",
-        ExpressionAttributeValues: { ":email": email.toLowerCase().trim() },
-        Limit: 1,
-      })
-    );
+    const existingUser = await findUserByEmail(email);
 
-    if (scanResult.Items && scanResult.Items.length > 0) {
+    if (existingUser) {
       res.status(409).json({ error: { message: "An account with this email already exists.", status: "ALREADY_EXISTS" } });
       return;
     }
@@ -211,16 +228,8 @@ export async function handleLogin(req: Request, res: Response) {
       return;
     }
 
-    // Find user by email
-    const searchEmail = email.toLowerCase().trim();
-    
-    const scanResult = await ddb.send(
-      new ScanCommand({
-        TableName: USERS_TABLE,
-      })
-    );
-
-    const user = scanResult.Items?.find((item: any) => item.email === searchEmail);
+    // Find user by email using paginated scan
+    const user = await findUserByEmail(email);
 
     if (!user) {
       res.status(401).json({ error: { message: "Invalid email or password.", status: "UNAUTHENTICATED" } });
@@ -233,7 +242,7 @@ export async function handleLogin(req: Request, res: Response) {
     }
 
     const valid = await verifyPassword(password, user.passwordHash);
-    
+
     if (!valid) {
       res.status(401).json({ error: { message: "Invalid email or password.", status: "UNAUTHENTICATED" } });
       return;
