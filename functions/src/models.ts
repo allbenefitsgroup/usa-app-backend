@@ -115,6 +115,7 @@ export interface Recommendation {
   ctaLabel?: string | null;
   ctaLink?: string | null;
   active: boolean;
+  order: number;
   createdAt: Timestamp;
   updatedAt?: Timestamp;
 }

@@ -16,6 +16,7 @@ import {
   handleCreateRecommendation,
   handleUpdateRecommendation,
   handleDeleteRecommendation,
+  handleReorderRecommendations,
   ApiRequest,
 } from "./index";
 import {
@@ -124,6 +125,7 @@ app.get("/api/admin/recommendations", requireAuth, requireAdmin, async (_req: Re
 app.post("/api/admin/recommendations", requireAuth, requireAdmin, wrapHandler(handleCreateRecommendation));
 app.put("/api/admin/recommendations/:id", requireAuth, requireAdmin, wrapHandler(handleUpdateRecommendation));
 app.delete("/api/admin/recommendations/:id", requireAuth, requireAdmin, wrapHandler(handleDeleteRecommendation));
+app.put("/api/admin/recommendations/reorder", requireAuth, requireAdmin, wrapHandler(handleReorderRecommendations));
 
 // Stripe webhook (raw body)
 app.post(stripeWebhookPath, async (req: Request, res: Response) => {

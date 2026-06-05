@@ -917,14 +917,10 @@ export async function handleGetRecommendations() {
   }> = [];
 
   try {
-    const snapshot = await db.collection("recommendations").where("active", "==", true).get();
+    const snapshot = await db.collection("recommendations").where("active", "==", true).orderBy("order", "asc").get();
     if (!snapshot.empty) {
-      const docs = snapshot.docs;
-      const createdAtMap = new Map<string, number>();
-      items = docs.map((doc) => {
+      items = snapshot.docs.map((doc) => {
         const data = doc.data();
-        const ts = data.createdAt;
-        createdAtMap.set(doc.id, ts instanceof Timestamp ? ts.toMillis() : 0);
         return {
           id: doc.id,
           title: typeof data.title === "string" ? data.title : "",
@@ -938,8 +934,6 @@ export async function handleGetRecommendations() {
           ctaLink: data.ctaLink || null,
         };
       });
-      // Sort by createdAt desc (newest first)
-      items.sort((a, b) => (createdAtMap.get(b.id) || 0) - (createdAtMap.get(a.id) || 0));
     }
   } catch (err) {
     logger.warn("Failed to load recommendations from Firestore, using defaults.", err);
@@ -1000,7 +994,7 @@ export const getRecommendations = onCall(
 
 // Admin CRUD for recommendations
 export async function handleListRecommendations() {
-  const snapshot = await db.collection("recommendations").orderBy("createdAt", "desc").get();
+  const snapshot = await db.collection("recommendations").orderBy("order", "asc").get();
   return {
     recommendations: snapshot.docs.map((doc) => {
       const data = doc.data();
@@ -1016,6 +1010,7 @@ export async function handleListRecommendations() {
         ctaLabel: data.ctaLabel || null,
         ctaLink: data.ctaLink || null,
         active: !!data.active,
+        order: typeof data.order === "number" ? data.order : 0,
         createdAt: timestampToMillis(data.createdAt),
       };
     }),
@@ -1053,6 +1048,10 @@ export async function handleCreateRecommendation(request: ApiRequest<CreateRecom
     throw new HttpsError("invalid-argument", `type must be one of: ${validTypes.join(", ")}.`);
   }
 
+  // Assign order at the end (highest existing + 1) so new items appear last
+  const countSnap = await db.collection("recommendations").count().get();
+  const nextOrder = (countSnap.data().count || 0) + 1;
+
   const docRef = db.collection("recommendations").doc();
   const now = FieldValue.serverTimestamp();
 
@@ -1067,6 +1066,7 @@ export async function handleCreateRecommendation(request: ApiRequest<CreateRecom
     ctaLabel: data.ctaLabel || null,
     ctaLink: data.ctaLink || null,
     active: typeof data.active === "boolean" ? data.active : true,
+    order: nextOrder,
     createdAt: now,
     updatedAt: now,
   });
@@ -1135,4 +1135,35 @@ export async function handleDeleteRecommendation(request: ApiRequest<{ id?: stri
 
   await docRef.delete();
   return { ok: true, id };
+}
+
+type ReorderItem = { id: string; order: number };
+type ReorderRecommendationsInput = {
+  items?: ReorderItem[];
+};
+
+export async function handleReorderRecommendations(request: ApiRequest<ReorderRecommendationsInput>) {
+  const data = request.data || {};
+  const items = Array.isArray(data.items) ? data.items : [];
+
+  if (items.length === 0) {
+    throw new HttpsError("invalid-argument", "items array is required.");
+  }
+
+  const batch = db.batch();
+  const now = FieldValue.serverTimestamp();
+
+  for (const item of items) {
+    if (!item.id || typeof item.id !== "string") {
+      throw new HttpsError("invalid-argument", "Each item must have a valid id.");
+    }
+    if (typeof item.order !== "number") {
+      throw new HttpsError("invalid-argument", "Each item must have a valid order number.");
+    }
+    const ref = db.collection("recommendations").doc(item.id);
+    batch.update(ref, { order: item.order, updatedAt: now });
+  }
+
+  await batch.commit();
+  return { ok: true, updated: items.length };
 }
