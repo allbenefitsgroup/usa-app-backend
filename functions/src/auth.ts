@@ -117,8 +117,9 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
   next();
 }
 
-async function findUserByEmail(email: string): Promise<Record<string, any> | null> {
+async function findUsersByEmail(email: string): Promise<Record<string, any>[]> {
   const searchEmail = email.toLowerCase().trim();
+  const users: Record<string, any>[] = [];
   let lastEvaluatedKey: Record<string, any> | undefined = undefined;
 
   do {
@@ -132,13 +133,13 @@ async function findUserByEmail(email: string): Promise<Record<string, any> | nul
     );
 
     if (scanResult.Items && scanResult.Items.length > 0) {
-      return scanResult.Items[0];
+      users.push(...scanResult.Items);
     }
 
     lastEvaluatedKey = scanResult.LastEvaluatedKey;
   } while (lastEvaluatedKey);
 
-  return null;
+  return users;
 }
 
 export async function handleRegister(req: Request, res: Response) {
@@ -165,10 +166,10 @@ export async function handleRegister(req: Request, res: Response) {
       return;
     }
 
-    // Check if email already exists
-    const existingUser = await findUserByEmail(email);
+    // Check if email already exists (any role)
+    const existingUsers = await findUsersByEmail(email);
 
-    if (existingUser) {
+    if (existingUsers.length > 0) {
       res.status(409).json({ error: { message: "An account with this email already exists.", status: "ALREADY_EXISTS" } });
       return;
     }
@@ -228,37 +229,41 @@ export async function handleLogin(req: Request, res: Response) {
       return;
     }
 
-    // Find user by email using paginated scan
-    const user = await findUserByEmail(email);
+    // Find all users with this email and verify password against each
+    const users = await findUsersByEmail(email);
 
-    if (!user) {
+    if (users.length === 0) {
       res.status(401).json({ error: { message: "Invalid email or password.", status: "UNAUTHENTICATED" } });
       return;
     }
 
-    if (!user.passwordHash) {
+    let matchedUser: Record<string, any> | null = null;
+    for (const user of users) {
+      if (user.passwordHash) {
+        const valid = await verifyPassword(password, user.passwordHash);
+        if (valid) {
+          matchedUser = user;
+          break;
+        }
+      }
+    }
+
+    if (!matchedUser) {
       res.status(401).json({ error: { message: "Invalid email or password.", status: "UNAUTHENTICATED" } });
       return;
     }
 
-    const valid = await verifyPassword(password, user.passwordHash);
-
-    if (!valid) {
-      res.status(401).json({ error: { message: "Invalid email or password.", status: "UNAUTHENTICATED" } });
-      return;
-    }
-
-    const token = signToken({ uid: user.uid, email: user.email, role: user.role });
+    const token = signToken({ uid: matchedUser.uid, email: matchedUser.email, role: matchedUser.role });
 
     res.json({
       ok: true,
       token,
       user: {
-        uid: user.uid,
-        name: user.name,
-        email: user.email,
-        phone: user.phone || null,
-        role: user.role,
+        uid: matchedUser.uid,
+        name: matchedUser.name,
+        email: matchedUser.email,
+        phone: matchedUser.phone || null,
+        role: matchedUser.role,
       },
     });
   } catch (error: any) {
