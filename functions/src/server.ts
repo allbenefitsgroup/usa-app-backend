@@ -12,6 +12,10 @@ import {
   handleRequestProductInfo,
   handleSendWhatsappNotification,
   handleGetRecommendations,
+  handleListRecommendations,
+  handleCreateRecommendation,
+  handleUpdateRecommendation,
+  handleDeleteRecommendation,
   ApiRequest,
 } from "./index";
 import {
@@ -37,6 +41,18 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use(cors({ origin: true }));
+
+// Admin middleware: requires auth and role must be seller
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  const authContext = (req as any).authContext;
+  if (!authContext) {
+    return res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
+  }
+  if (authContext.role !== "seller") {
+    return res.status(403).json({ error: { message: "Forbidden: admin access required.", status: "PERMISSION_DENIED" } });
+  }
+  next();
+}
 
 // Helper to wrap callable handlers for Express
 function wrapHandler<T>(handler: (req: ApiRequest<T>) => Promise<any>, requiresAuth = true) {
@@ -94,6 +110,20 @@ app.get("/api/recommendations", async (_req: Request, res: Response) => {
     });
   }
 });
+
+// Admin CRUD for recommendations (only sellers)
+app.get("/api/admin/recommendations", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const result = await handleListRecommendations();
+    res.json({ result });
+  } catch (error: any) {
+    console.error("List recommendations error:", error);
+    res.status(500).json({ error: { message: error.message || "Internal error", status: "INTERNAL" } });
+  }
+});
+app.post("/api/admin/recommendations", requireAuth, requireAdmin, wrapHandler(handleCreateRecommendation));
+app.put("/api/admin/recommendations/:id", requireAuth, requireAdmin, wrapHandler(handleUpdateRecommendation));
+app.delete("/api/admin/recommendations/:id", requireAuth, requireAdmin, wrapHandler(handleDeleteRecommendation));
 
 // Stripe webhook (raw body)
 app.post(stripeWebhookPath, async (req: Request, res: Response) => {

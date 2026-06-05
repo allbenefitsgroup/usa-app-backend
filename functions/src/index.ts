@@ -997,3 +997,142 @@ export const getRecommendations = onCall(
     return handleGetRecommendations();
   },
 );
+
+// Admin CRUD for recommendations
+export async function handleListRecommendations() {
+  const snapshot = await db.collection("recommendations").orderBy("createdAt", "desc").get();
+  return {
+    recommendations: snapshot.docs.map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        title: data.title || "",
+        subtitle: data.subtitle || "",
+        type: data.type || "general",
+        externalUrl: data.externalUrl || null,
+        imageUrl: data.imageUrl || null,
+        color: data.color || null,
+        icon: data.icon || null,
+        ctaLabel: data.ctaLabel || null,
+        ctaLink: data.ctaLink || null,
+        active: !!data.active,
+        createdAt: timestampToMillis(data.createdAt),
+      };
+    }),
+  };
+}
+
+type CreateRecommendationInput = {
+  title?: string;
+  subtitle?: string;
+  type?: string;
+  externalUrl?: string | null;
+  imageUrl?: string | null;
+  color?: string | null;
+  icon?: string | null;
+  ctaLabel?: string | null;
+  ctaLink?: string | null;
+  active?: boolean;
+};
+
+export async function handleCreateRecommendation(request: ApiRequest<CreateRecommendationInput>) {
+  const data = request.data || {};
+  const title = typeof data.title === "string" ? data.title.trim() : "";
+  const subtitle = typeof data.subtitle === "string" ? data.subtitle.trim() : "";
+
+  if (!title) {
+    throw new HttpsError("invalid-argument", "title is required.");
+  }
+  if (!subtitle) {
+    throw new HttpsError("invalid-argument", "subtitle is required.");
+  }
+
+  const type = typeof data.type === "string" ? data.type.trim() : "general";
+  const validTypes = ["instagram", "youtube", "general"];
+  if (!validTypes.includes(type)) {
+    throw new HttpsError("invalid-argument", `type must be one of: ${validTypes.join(", ")}.`);
+  }
+
+  const docRef = db.collection("recommendations").doc();
+  const now = FieldValue.serverTimestamp();
+
+  await docRef.set({
+    title,
+    subtitle,
+    type,
+    externalUrl: data.externalUrl || null,
+    imageUrl: data.imageUrl || null,
+    color: data.color || null,
+    icon: data.icon || null,
+    ctaLabel: data.ctaLabel || null,
+    ctaLink: data.ctaLink || null,
+    active: typeof data.active === "boolean" ? data.active : true,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  return { ok: true, id: docRef.id };
+}
+
+type UpdateRecommendationInput = {
+  id?: string;
+  title?: string;
+  subtitle?: string;
+  type?: string;
+  externalUrl?: string | null;
+  imageUrl?: string | null;
+  color?: string | null;
+  icon?: string | null;
+  ctaLabel?: string | null;
+  ctaLink?: string | null;
+  active?: boolean;
+};
+
+export async function handleUpdateRecommendation(request: ApiRequest<UpdateRecommendationInput>) {
+  const data = request.data || {};
+  const id = assertString(data.id, "id");
+
+  const docRef = db.collection("recommendations").doc(id);
+  const snapshot = await docRef.get();
+  if (!snapshot.exists) {
+    throw new HttpsError("not-found", "Recommendation not found.");
+  }
+
+  const payload: Record<string, any> = {
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+
+  if (typeof data.title === "string") payload.title = data.title.trim();
+  if (typeof data.subtitle === "string") payload.subtitle = data.subtitle.trim();
+  if (typeof data.type === "string") {
+    const validTypes = ["instagram", "youtube", "general"];
+    if (!validTypes.includes(data.type)) {
+      throw new HttpsError("invalid-argument", `type must be one of: ${validTypes.join(", ")}.`);
+    }
+    payload.type = data.type.trim();
+  }
+  if (data.externalUrl !== undefined) payload.externalUrl = data.externalUrl;
+  if (data.imageUrl !== undefined) payload.imageUrl = data.imageUrl;
+  if (data.color !== undefined) payload.color = data.color;
+  if (data.icon !== undefined) payload.icon = data.icon;
+  if (data.ctaLabel !== undefined) payload.ctaLabel = data.ctaLabel;
+  if (data.ctaLink !== undefined) payload.ctaLink = data.ctaLink;
+  if (typeof data.active === "boolean") payload.active = data.active;
+
+  await docRef.update(payload);
+  return { ok: true, id };
+}
+
+export async function handleDeleteRecommendation(request: ApiRequest<{ id?: string }>) {
+  const data = request.data || {};
+  const id = assertString(data.id, "id");
+
+  const docRef = db.collection("recommendations").doc(id);
+  const snapshot = await docRef.get();
+  if (!snapshot.exists) {
+    throw new HttpsError("not-found", "Recommendation not found.");
+  }
+
+  await docRef.delete();
+  return { ok: true, id };
+}
