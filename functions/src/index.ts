@@ -755,11 +755,21 @@ export const sendWhatsappNotification = onCall(
   wrapOnCall(handleSendWhatsappNotification),
 );
 
-const RECOMMENDATIONS: Array<{ id: string; title: string; subtitle: string; color?: string; icon?: string; ctaLabel?: string; ctaLink?: string }> = [
+const DEFAULT_RECOMMENDATIONS: Array<{
+  id: string;
+  title: string;
+  subtitle: string;
+  type: "general";
+  color?: string;
+  icon?: string;
+  ctaLabel?: string;
+  ctaLink?: string;
+}> = [
   {
     id: "rec-001",
     title: "PROTEGÉ TU FUTURO HOY",
     subtitle: "El IUL combina protección familiar + acumulación libre de impuestos. Tu dinero crece con el mercado sin riesgo de pérdida.",
+    type: "general",
     color: "#2E8B57",
     icon: "trending-up",
     ctaLabel: "Conocer IUL",
@@ -769,6 +779,7 @@ const RECOMMENDATIONS: Array<{ id: string; title: string; subtitle: string; colo
     id: "rec-002",
     title: "TU CASA, TU LEGADO",
     subtitle: "Con Mortgage Protection, tu familia no pierde el hogar si algo te pasa. Cubrimos tu hipoteca en caso de fallecimiento o enfermedad grave.",
+    type: "general",
     color: "#4682B4",
     icon: "home",
     ctaLabel: "Proteger mi hipoteca",
@@ -778,6 +789,7 @@ const RECOMMENDATIONS: Array<{ id: string; title: string; subtitle: string; colo
     id: "rec-003",
     title: "SONREÍ SIN PREOCUPACIONES",
     subtitle: "El seguro dental cubre limpiezas, revisiones y descuentos en tratamientos. Prevención hoy, ahorro mañana.",
+    type: "general",
     color: "#87CEEB",
     icon: "tooth",
     ctaLabel: "Ver plan dental",
@@ -787,6 +799,7 @@ const RECOMMENDATIONS: Array<{ id: string; title: string; subtitle: string; colo
     id: "rec-004",
     title: "CUIDÁ TU VISTA, MEJORÁ TU VIDA",
     subtitle: "Con cobertura de optometría tenés exámenes periódicos y descuentos en lentes. La salud visual es salud total.",
+    type: "general",
     color: "#9370DB",
     icon: "eye",
     ctaLabel: "Ver cobertura visual",
@@ -796,6 +809,7 @@ const RECOMMENDATIONS: Array<{ id: string; title: string; subtitle: string; colo
     id: "rec-005",
     title: "NO DEJES DEUDAS A QUIENES AMÁS",
     subtitle: "El seguro funerario cubre gastos inmediatos sin exámenes médicos ni trámites largos. Protegé a tu familia de gastos inesperados.",
+    type: "general",
     color: "#708090",
     icon: "shield",
     ctaLabel: "Cotizar seguro funerario",
@@ -805,6 +819,7 @@ const RECOMMENDATIONS: Array<{ id: string; title: string; subtitle: string; colo
     id: "rec-006",
     title: "ACCIDENTES PASAN. PREPARATE.",
     subtitle: "La póliza de accidentes te paga en efectivo por caídas, fracturas y más. Cobertura 24/7 para toda la familia y costos accesibles.",
+    type: "general",
     color: "#FF6347",
     icon: "alert-triangle",
     ctaLabel: "Ver póliza de accidentes",
@@ -814,6 +829,7 @@ const RECOMMENDATIONS: Array<{ id: string; title: string; subtitle: string; colo
     id: "rec-007",
     title: "AHORRÁ PARA EL RETIRO SIN RIESGOS",
     subtitle: "El IUL es ideal para jubilación o educación de tus hijos: crecimiento basado en el S&P 500, acceso a tu dinero en vida y sin pérdidas.",
+    type: "general",
     color: "#228B22",
     icon: "piggy-bank",
     ctaLabel: "Simular mi IUL",
@@ -823,6 +839,7 @@ const RECOMMENDATIONS: Array<{ id: string; title: string; subtitle: string; colo
     id: "rec-008",
     title: "TU FAMILIA MERECE TRANQUILIDAD",
     subtitle: "Mortgage Protection garantiza que tus seres queridos mantengan la casa. Pagos directos al banco o beneficiarios.",
+    type: "general",
     color: "#4169E1",
     icon: "heart",
     ctaLabel: "Proteger a mi familia",
@@ -832,6 +849,7 @@ const RECOMMENDATIONS: Array<{ id: string; title: string; subtitle: string; colo
     id: "rec-009",
     title: "LA SALUD BUCAL EMPIEZA HOY",
     subtitle: "Limpiezas incluidas, descuentos en cirugías y ortodoncia para niños. Un plan dental evita problemas mayores y gastos sorpresa.",
+    type: "general",
     color: "#00CED1",
     icon: "smile",
     ctaLabel: "Activar plan dental",
@@ -841,6 +859,7 @@ const RECOMMENDATIONS: Array<{ id: string; title: string; subtitle: string; colo
     id: "rec-010",
     title: "DETECTÁ A TIEMPO, VIVÍ MEJOR",
     subtitle: "Exámenes visuales periódicos detectan problemas antes de que empeoren. Con Vision tenés descuentos en gafas y lentes de contacto.",
+    type: "general",
     color: "#6A5ACD",
     icon: "glasses",
     ctaLabel: "Ver plan de visión",
@@ -850,6 +869,7 @@ const RECOMMENDATIONS: Array<{ id: string; title: string; subtitle: string; colo
     id: "rec-011",
     title: "UN GESTO DE AMOR PARA SIEMPRE",
     subtitle: "El seguro funerario es económico, accesible y pago rápido a beneficiarios. Dejá paz a tu familia, no deudas.",
+    type: "general",
     color: "#556B2F",
     icon: "peace",
     ctaLabel: "Cotizar ahora",
@@ -859,6 +879,7 @@ const RECOMMENDATIONS: Array<{ id: string; title: string; subtitle: string; colo
     id: "rec-012",
     title: "PROTECCIÓN REAL PARA EL DÍA A DÍA",
     subtitle: "Accidentes dentro y fuera de casa. Pagos directos en efectivo para gastos médicos y hospitalarios. Una sola póliza para toda la familia.",
+    type: "general",
     color: "#DC143C",
     icon: "shield-check",
     ctaLabel: "Conocer cobertura",
@@ -880,13 +901,73 @@ function getSixHourBlock(date: Date): number {
 
 export async function handleGetRecommendations() {
   const now = new Date();
+
+  // Try to load active recommendations from Firestore first (social ads, promos, etc.)
+  let items: Array<{
+    id: string;
+    title: string;
+    subtitle: string;
+    type: string;
+    externalUrl?: string | null;
+    imageUrl?: string | null;
+    color?: string | null;
+    icon?: string | null;
+    ctaLabel?: string | null;
+    ctaLink?: string | null;
+  }> = [];
+
+  try {
+    const snapshot = await db.collection("recommendations").where("active", "==", true).get();
+    if (!snapshot.empty) {
+      const docs = snapshot.docs;
+      const createdAtMap = new Map<string, number>();
+      items = docs.map((doc) => {
+        const data = doc.data();
+        const ts = data.createdAt;
+        createdAtMap.set(doc.id, ts instanceof Timestamp ? ts.toMillis() : 0);
+        return {
+          id: doc.id,
+          title: typeof data.title === "string" ? data.title : "",
+          subtitle: typeof data.subtitle === "string" ? data.subtitle : "",
+          type: typeof data.type === "string" ? data.type : "general",
+          externalUrl: data.externalUrl || null,
+          imageUrl: data.imageUrl || null,
+          color: data.color || null,
+          icon: data.icon || null,
+          ctaLabel: data.ctaLabel || null,
+          ctaLink: data.ctaLink || null,
+        };
+      });
+      // Sort by createdAt desc (newest first)
+      items.sort((a, b) => (createdAtMap.get(b.id) || 0) - (createdAtMap.get(a.id) || 0));
+    }
+  } catch (err) {
+    logger.warn("Failed to load recommendations from Firestore, using defaults.", err);
+  }
+
+  const source =
+    items.length > 0
+      ? items
+      : DEFAULT_RECOMMENDATIONS.map((r) => ({
+          id: r.id,
+          title: r.title,
+          subtitle: r.subtitle,
+          type: r.type,
+          externalUrl: null,
+          imageUrl: null,
+          color: r.color || null,
+          icon: r.icon || null,
+          ctaLabel: r.ctaLabel || null,
+          ctaLink: r.ctaLink || null,
+        }));
+
   const blockIndex = getSixHourBlock(now);
-  const shift = blockIndex % RECOMMENDATIONS.length;
+  const shift = blockIndex % source.length;
 
   // Rotate so the current block's recommendation is first, preserving order
   const rotated = [
-    ...RECOMMENDATIONS.slice(shift),
-    ...RECOMMENDATIONS.slice(0, shift),
+    ...source.slice(shift),
+    ...source.slice(0, shift),
   ];
 
   return {
@@ -894,13 +975,16 @@ export async function handleGetRecommendations() {
       id: r.id,
       title: r.title,
       subtitle: r.subtitle,
+      type: r.type,
+      externalUrl: r.externalUrl || null,
+      imageUrl: r.imageUrl || null,
       color: r.color || null,
       icon: r.icon || null,
       ctaLabel: r.ctaLabel || null,
       ctaLink: r.ctaLink || null,
     })),
     activeIndex: 0,
-    total: RECOMMENDATIONS.length,
+    total: source.length,
     updatedAt: now.toISOString(),
   };
 }

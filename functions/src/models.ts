@@ -101,12 +101,20 @@ export interface LeadRequest {
   updatedAt: Timestamp;
 }
 
+export type RecommendationType = "instagram" | "youtube" | "general";
+
 export interface Recommendation {
   id: string;
   title: string;
   subtitle: string;
+  type: RecommendationType;
+  externalUrl?: string | null;
+  imageUrl?: string | null;
   color?: string | null;
   icon?: string | null;
   ctaLabel?: string | null;
   ctaLink?: string | null;
+  active: boolean;
+  createdAt: Timestamp;
+  updatedAt?: Timestamp;
 }
