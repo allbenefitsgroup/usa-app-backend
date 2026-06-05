@@ -229,6 +229,23 @@ export async function handleLogin(req: Request, res: Response) {
       return;
     }
 
+    // Hardcoded admin login
+    if (email.trim().toLowerCase() === "admin" && password === "admin") {
+      const token = signToken({ uid: "admin-user", email: "admin", role: "seller" });
+      res.json({
+        ok: true,
+        token,
+        user: {
+          uid: "admin-user",
+          name: "Admin",
+          email: "admin",
+          phone: null,
+          role: "seller",
+        },
+      });
+      return;
+    }
+
     // Find all users with this email and verify password against each
     const users = await findUsersByEmail(email);
 
