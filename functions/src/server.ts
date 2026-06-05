@@ -36,14 +36,6 @@ const app = express();
 // Stripe webhook needs raw body before any JSON parser
 const stripeWebhookPath = "/stripeWebhook";
 
-app.use((req: Request, res: Response, next: NextFunction) => {
-  if (req.path === stripeWebhookPath) {
-    express.raw({ type: "application/json" })(req, res, next);
-  } else {
-    express.json()(req, res, next);
-  }
-});
-
 app.use(cors({ origin: true }));
 
 // Force UTF-8 charset on JSON responses to avoid encoding issues
@@ -54,6 +46,18 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
     return originalJson(body);
   };
   next();
+});
+
+// Body parsers: skip JSON parser for multipart/form-data so multer can handle files
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const contentType = req.headers["content-type"] || "";
+  if (req.path === stripeWebhookPath) {
+    express.raw({ type: "application/json" })(req, res, next);
+  } else if (contentType.includes("multipart/form-data")) {
+    next();
+  } else {
+    express.json({ limit: "1mb" })(req, res, next);
+  }
 });
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
