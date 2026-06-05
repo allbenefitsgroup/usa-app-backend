@@ -229,23 +229,6 @@ export async function handleLogin(req: Request, res: Response) {
       return;
     }
 
-    // Hardcoded admin login
-    if (email.trim().toLowerCase() === "admin" && password === "admin") {
-      const token = signToken({ uid: "admin-user", email: "admin", role: "seller" });
-      res.json({
-        ok: true,
-        token,
-        user: {
-          uid: "admin-user",
-          name: "Admin",
-          email: "admin",
-          phone: null,
-          role: "seller",
-        },
-      });
-      return;
-    }
-
     // Find all users with this email and verify password against each
     const users = await findUsersByEmail(email);
 
@@ -285,6 +268,45 @@ export async function handleLogin(req: Request, res: Response) {
     });
   } catch (error: any) {
     console.error("Login error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: { message: error.message || "Internal server error", status: "INTERNAL" } });
+    }
+  }
+}
+
+export async function handleAdminLogin(req: Request, res: Response) {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || typeof username !== "string") {
+      res.status(400).json({ error: { message: "username is required.", status: "INVALID_ARGUMENT" } });
+      return;
+    }
+    if (!password || typeof password !== "string") {
+      res.status(400).json({ error: { message: "password is required.", status: "INVALID_ARGUMENT" } });
+      return;
+    }
+
+    // Hardcoded admin credentials
+    if (username.trim() === "admin" && password === "admin") {
+      const token = signToken({ uid: "admin-user", email: "admin", role: "admin" });
+      res.json({
+        ok: true,
+        token,
+        user: {
+          uid: "admin-user",
+          name: "Admin",
+          email: "admin",
+          phone: null,
+          role: "admin",
+        },
+      });
+      return;
+    }
+
+    res.status(401).json({ error: { message: "Invalid username or password.", status: "UNAUTHENTICATED" } });
+  } catch (error: any) {
+    console.error("Admin login error:", error);
     if (!res.headersSent) {
       res.status(500).json({ error: { message: error.message || "Internal server error", status: "INTERNAL" } });
     }

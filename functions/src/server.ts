@@ -24,6 +24,7 @@ import {
   optionalAuth,
   handleRegister,
   handleLogin,
+  handleAdminLogin,
   handleGetMe,
   handleLogout,
 } from "./auth";
@@ -43,13 +44,14 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 app.use(cors({ origin: true }));
 
-// Admin middleware: requires auth and role must be seller
+// Admin middleware: requires auth and role must be seller or admin
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const authContext = (req as any).authContext;
   if (!authContext) {
     return res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
   }
-  if (authContext.role !== "seller") {
+  const allowedRoles = ["seller", "admin"];
+  if (!allowedRoles.includes(authContext.role)) {
     return res.status(403).json({ error: { message: "Forbidden: admin access required.", status: "PERMISSION_DENIED" } });
   }
   next();
@@ -86,6 +88,7 @@ function wrapHandler<T>(handler: (req: ApiRequest<T>) => Promise<any>, requiresA
 // Auth endpoints
 app.post("/api/auth/register", (req, res, next) => { handleRegister(req, res).catch(next); });
 app.post("/api/auth/login", (req, res, next) => { handleLogin(req, res).catch(next); });
+app.post("/api/auth/admin/login", (req, res, next) => { handleAdminLogin(req, res).catch(next); });
 app.post("/api/auth/logout", handleLogout);
 app.get("/api/auth/me", requireAuth, (req, res, next) => { handleGetMe(req, res).catch(next); });
 
