@@ -322,6 +322,65 @@ paths:
                       updatedAt:
                         type: string
 
+  /api/admin/users:
+    get:
+      summary: Listar todos los usuarios (admin)
+      description: |
+        Devuelve todos los usuarios registrados. Puede filtrarse por rol usando query param.
+        Requiere rol `seller` o `admin`.
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: role
+          required: false
+          schema:
+            type: string
+            enum: [client, customer, student, seller]
+          description: Filtrar usuarios por rol
+      responses:
+        "200":
+          description: Lista de usuarios
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  users:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        uid:
+                          type: string
+                        name:
+                          type: string
+                        email:
+                          type: string
+                        phone:
+                          type: string
+                          nullable: true
+                        role:
+                          type: string
+                        createdAt:
+                          type: string
+                          nullable: true
+                        updatedAt:
+                          type: string
+                          nullable: true
+                  total:
+                    type: integer
+        "400":
+          description: Rol invalido
+        "401":
+          description: No autenticado
+        "403":
+          description: Sin permisos
+
   /api/admin/recommendations:
     get:
       summary: Listar todas las recomendaciones (admin)
