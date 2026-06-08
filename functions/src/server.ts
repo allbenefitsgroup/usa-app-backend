@@ -32,6 +32,7 @@ import {
   handleDeleteUser,
   handleCreateUser,
   handleGetUser,
+  handleGetUserPublic,
 } from "./auth";
 import { uploadImageToS3 } from "./s3Upload";
 import {
@@ -143,6 +144,9 @@ app.get("/api/admin/users", requireAuth, handleListUsers);
 app.get("/api/admin/users/:id", requireAuth, handleGetUser);
 app.post("/api/admin/users", requireAuth, handleCreateUser);
 app.delete("/api/admin/users/:id", requireAuth, handleDeleteUser);
+
+// Public user endpoint (for any authenticated user)
+app.get("/api/users/:id", requireAuth, handleGetUserPublic);
 
 // Client services endpoints
 app.get("/api/my-services", requireAuth, handleGetMyServices);
