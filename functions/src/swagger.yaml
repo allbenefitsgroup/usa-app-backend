@@ -381,6 +381,44 @@ paths:
         "403":
           description: Sin permisos
 
+  /api/admin/users/{id}:
+    delete:
+      summary: Eliminar un usuario (admin)
+      description: |
+        Elimina permanentemente un usuario por su UID.
+        Requiere rol `seller` o `admin`.
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: UID del usuario a eliminar
+      responses:
+        "200":
+          description: Usuario eliminado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  id:
+                    type: string
+        "400":
+          description: ID requerido
+        "401":
+          description: No autenticado
+        "403":
+          description: Sin permisos
+        "404":
+          description: Usuario no encontrado
+
   /api/admin/recommendations:
     get:
       summary: Listar todas las recomendaciones (admin)

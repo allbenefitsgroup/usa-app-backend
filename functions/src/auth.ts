@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { promisify } from "util";
 import jwt from "jsonwebtoken";
-import { GetCommand, PutCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, PutCommand, ScanCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 import { ddb, USERS_TABLE, REVOKED_TOKENS_TABLE } from "./dynamodb";
 import { jwtSecret } from "./config";
 
@@ -440,6 +440,56 @@ export async function handleLogout(req: Request, res: Response) {
     res.json({ ok: true, message: "Logged out successfully" });
   } catch (error: any) {
     console.error("Logout error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: { message: error.message || "Internal server error", status: "INTERNAL" } });
+    }
+  }
+}
+
+export async function handleDeleteUser(req: Request, res: Response) {
+  try {
+    const authContext = (req as any).authContext as AuthContext | undefined;
+    if (!authContext) {
+      res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
+      return;
+    }
+
+    const allowedRoles = ["seller", "admin"];
+    if (!allowedRoles.includes(authContext.role || "")) {
+      res.status(403).json({ error: { message: "Forbidden: admin access required.", status: "PERMISSION_DENIED" } });
+      return;
+    }
+
+    const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: { message: "id is required.", status: "INVALID_ARGUMENT" } });
+      return;
+    }
+
+    // Verificar que el usuario existe
+    const getResult = await ddb.send(
+      new GetCommand({
+        TableName: USERS_TABLE,
+        Key: { uid: id },
+      })
+    );
+
+    if (!getResult.Item) {
+      res.status(404).json({ error: { message: "User not found.", status: "NOT_FOUND" } });
+      return;
+    }
+
+    // Eliminar el usuario
+    await ddb.send(
+      new DeleteCommand({
+        TableName: USERS_TABLE,
+        Key: { uid: id },
+      })
+    );
+
+    res.json({ ok: true, id });
+  } catch (error: any) {
+    console.error("DeleteUser error:", error);
     if (!res.headersSent) {
       res.status(500).json({ error: { message: error.message || "Internal server error", status: "INTERNAL" } });
     }
