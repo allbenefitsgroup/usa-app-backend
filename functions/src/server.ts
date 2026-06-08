@@ -30,6 +30,7 @@ import {
   handleLogout,
   handleListUsers,
   handleDeleteUser,
+  handleCreateUser,
 } from "./auth";
 import { uploadImageToS3 } from "./s3Upload";
 import {
@@ -138,6 +139,7 @@ app.delete("/api/admin/service-catalog/:id", requireAuth, handleDeleteCatalogIte
 
 // Admin users list (with optional role filter)
 app.get("/api/admin/users", requireAuth, handleListUsers);
+app.post("/api/admin/users", requireAuth, handleCreateUser);
 app.delete("/api/admin/users/:id", requireAuth, handleDeleteUser);
 
 // Client services endpoints

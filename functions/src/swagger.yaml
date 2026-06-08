@@ -380,8 +380,123 @@ paths:
           description: No autenticado
         "403":
           description: Sin permisos
+    post:
+      summary: Crear un usuario (admin)
+      description: |
+        Crea un nuevo usuario (cliente, estudiante, vendedor, etc.) desde el panel de admin.
+        Requiere rol `seller` o `admin`.
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - email
+                - password
+                - role
+              properties:
+                name:
+                  type: string
+                  example: "Juan Perez"
+                email:
+                  type: string
+                  format: email
+                  example: "juan@example.com"
+                password:
+                  type: string
+                  format: password
+                  minLength: 6
+                  example: "secreto123"
+                phone:
+                  type: string
+                  nullable: true
+                  example: "+13051234567"
+                role:
+                  type: string
+                  enum:
+                    - client
+                    - customer
+                    - student
+                    - seller
+                  example: "client"
+      responses:
+        "201":
+          description: Usuario creado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  user:
+                    type: object
+                    properties:
+                      uid:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      phone:
+                        type: string
+                        nullable: true
+                      role:
+                        type: string
+        "400":
+          description: Datos invalidos
+        "401":
+          description: No autenticado
+        "403":
+          description: Sin permisos
+        "409":
+          description: El email ya esta registrado
 
   /api/admin/users/{id}:
+    delete:
+      summary: Eliminar un usuario (admin)
+      description: |
+        Elimina permanentemente un usuario por su UID.
+        Requiere rol `seller` o `admin`.
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: UID del usuario a eliminar
+      responses:
+        "200":
+          description: Usuario eliminado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  id:
+                    type: string
+        "400":
+          description: ID requerido
+        "401":
+          description: No autenticado
+        "403":
+          description: Sin permisos
+        "404":
+          description: Usuario no encontrado
+
+  /api/admin/recommendations:
     delete:
       summary: Eliminar un usuario (admin)
       description: |

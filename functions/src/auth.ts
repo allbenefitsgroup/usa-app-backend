@@ -216,6 +216,88 @@ export async function handleRegister(req: Request, res: Response) {
   }
 }
 
+export async function handleCreateUser(req: Request, res: Response) {
+  try {
+    const authContext = (req as any).authContext as AuthContext | undefined;
+    if (!authContext) {
+      res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
+      return;
+    }
+
+    const allowedRoles = ["seller", "admin"];
+    if (!allowedRoles.includes(authContext.role || "")) {
+      res.status(403).json({ error: { message: "Forbidden: admin access required.", status: "PERMISSION_DENIED" } });
+      return;
+    }
+
+    const { name, email, password, phone, role } = req.body;
+
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      res.status(400).json({ error: { message: "name is required.", status: "INVALID_ARGUMENT" } });
+      return;
+    }
+    if (!email || typeof email !== "string" || !/^\S+@\S+\.\S+$/.test(email)) {
+      res.status(400).json({ error: { message: "A valid email is required.", status: "INVALID_ARGUMENT" } });
+      return;
+    }
+    if (!password || typeof password !== "string" || password.length < 6) {
+      res.status(400).json({ error: { message: "password is required and must be at least 6 characters.", status: "INVALID_ARGUMENT" } });
+      return;
+    }
+
+    const validRoles = ["client", "customer", "student", "seller"];
+    const roleInput = typeof role === "string" ? role.trim() : null;
+    if (!roleInput || !validRoles.includes(roleInput)) {
+      res.status(400).json({ error: { message: `role is required and must be one of: ${validRoles.join(", ")}.`, status: "INVALID_ARGUMENT" } });
+      return;
+    }
+
+    // Check if email already exists
+    const existingUsers = await findUsersByEmail(email);
+
+    if (existingUsers.length > 0) {
+      res.status(409).json({ error: { message: "An account with this email already exists.", status: "ALREADY_EXISTS" } });
+      return;
+    }
+
+    const uid = generateUid();
+    const passwordHash = await hashPassword(password);
+    const now = new Date().toISOString();
+
+    await ddb.send(
+      new PutCommand({
+        TableName: USERS_TABLE,
+        Item: {
+          uid,
+          name: name.trim(),
+          email: email.toLowerCase().trim(),
+          phone: phone ? String(phone).trim() : null,
+          role: roleInput,
+          passwordHash,
+          createdAt: now,
+          updatedAt: now,
+        },
+      })
+    );
+
+    res.status(201).json({
+      ok: true,
+      user: {
+        uid,
+        name: name.trim(),
+        email: email.toLowerCase().trim(),
+        phone: phone ? String(phone).trim() : null,
+        role: roleInput,
+      },
+    });
+  } catch (error: any) {
+    console.error("CreateUser error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: { message: error.message || "Internal server error", status: "INTERNAL" } });
+    }
+  }
+}
+
 export async function handleLogin(req: Request, res: Response) {
   try {
     const { email, password } = req.body;
