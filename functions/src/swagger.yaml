@@ -459,6 +459,102 @@ paths:
           description: El email ya esta registrado
 
   /api/admin/users/{id}:
+    get:
+      summary: Obtener un usuario con sus servicios (admin)
+      description: |
+        Devuelve el perfil de un usuario y todos los servicios asignados.
+        Si el usuario no tiene servicios, devuelve `services: []` y `message: "User has 0 services assigned"`.
+        Requiere rol `seller` o `admin`.
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: UID del usuario
+      responses:
+        "200":
+          description: Perfil del usuario con servicios
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  user:
+                    type: object
+                    properties:
+                      uid:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      phone:
+                        type: string
+                        nullable: true
+                      role:
+                        type: string
+                  services:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        serviceName:
+                          type: string
+                        serviceType:
+                          type: string
+                          nullable: true
+                        policyNumber:
+                          type: string
+                          nullable: true
+                        contractDate:
+                          type: string
+                          nullable: true
+                        expiryDate:
+                          type: string
+                          nullable: true
+                        status:
+                          type: string
+                        coverageAmount:
+                          type: number
+                          nullable: true
+                        premiumAmount:
+                          type: number
+                          nullable: true
+                        currency:
+                          type: string
+                          nullable: true
+                        notes:
+                          type: string
+                          nullable: true
+                        beneficiaryName:
+                          type: string
+                          nullable: true
+                        beneficiaryPhone:
+                          type: string
+                          nullable: true
+                        createdAt:
+                          type: string
+                        updatedAt:
+                          type: string
+                  totalServices:
+                    type: integer
+                  message:
+                    type: string
+        "401":
+          description: No autenticado
+        "403":
+          description: Sin permisos
+        "404":
+          description: Usuario no encontrado
     delete:
       summary: Eliminar un usuario (admin)
       description: |

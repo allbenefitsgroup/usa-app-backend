@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { promisify } from "util";
 import jwt from "jsonwebtoken";
 import { GetCommand, PutCommand, ScanCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
-import { ddb, USERS_TABLE, REVOKED_TOKENS_TABLE } from "./dynamodb";
+import { ddb, USERS_TABLE, REVOKED_TOKENS_TABLE, SERVICES_TABLE } from "./dynamodb";
 import { jwtSecret } from "./config";
 
 export type AuthContext = {
@@ -389,6 +389,119 @@ export async function handleAdminLogin(req: Request, res: Response) {
     res.status(401).json({ error: { message: "Invalid username or password.", status: "UNAUTHENTICATED" } });
   } catch (error: any) {
     console.error("Admin login error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: { message: error.message || "Internal server error", status: "INTERNAL" } });
+    }
+  }
+}
+
+export async function handleGetUser(req: Request, res: Response) {
+  try {
+    const authContext = (req as any).authContext as AuthContext | undefined;
+    if (!authContext) {
+      res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
+      return;
+    }
+
+    const allowedRoles = ["seller", "admin"];
+    if (!allowedRoles.includes(authContext.role || "")) {
+      res.status(403).json({ error: { message: "Forbidden: admin access required.", status: "PERMISSION_DENIED" } });
+      return;
+    }
+
+    const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: { message: "id is required.", status: "INVALID_ARGUMENT" } });
+      return;
+    }
+
+    // Buscar usuario
+    const userResult = await ddb.send(
+      new GetCommand({
+        TableName: USERS_TABLE,
+        Key: { uid: id },
+      })
+    );
+
+    if (!userResult.Item) {
+      res.status(404).json({ error: { message: "User not found.", status: "NOT_FOUND" } });
+      return;
+    }
+
+    const user = userResult.Item;
+    const userProfile = {
+      uid: user.uid,
+      name: user.name,
+      email: user.email,
+      phone: user.phone || null,
+      role: user.role,
+    };
+
+    // Buscar servicios por userId
+    let services: any[] = [];
+    try {
+      const servicesResult = await ddb.send(
+        new ScanCommand({
+          TableName: SERVICES_TABLE,
+          FilterExpression: "userId = :userId",
+          ExpressionAttributeValues: { ":userId": id },
+        })
+      );
+      services = servicesResult.Items || [];
+
+      // Si no hay por userId, intentar por email (legacy)
+      if (services.length === 0 && user.email) {
+        const emailResult = await ddb.send(
+          new ScanCommand({
+            TableName: SERVICES_TABLE,
+            FilterExpression: "userEmail = :email",
+            ExpressionAttributeValues: { ":email": user.email.toLowerCase().trim() },
+          })
+        );
+        services = emailResult.Items || [];
+      }
+
+      // Ordenar por fecha de contratación descendente
+      services.sort((a: any, b: any) => {
+        const dateA = a.contractDate ? new Date(a.contractDate).getTime() : 0;
+        const dateB = b.contractDate ? new Date(b.contractDate).getTime() : 0;
+        return dateB - dateA;
+      });
+    } catch (err) {
+      console.error("GetUser services error:", err);
+      // No fallamos si hay error en servicios, devolvemos array vacío
+    }
+
+    const totalServices = services.length;
+    const message = totalServices === 0
+      ? "User has 0 services assigned"
+      : `User has ${totalServices} service(s) assigned`;
+
+    res.json({
+      ok: true,
+      user: userProfile,
+      services: services.map((s: any) => ({
+        id: s.id,
+        serviceName: s.serviceName,
+        serviceType: s.serviceType || null,
+        policyNumber: s.policyNumber || null,
+        contractDate: s.contractDate || null,
+        expiryDate: s.expiryDate || null,
+        status: s.status || "active",
+        coverageAmount: s.coverageAmount || null,
+        premiumAmount: s.premiumAmount || null,
+        currency: s.currency || null,
+        notes: s.notes || null,
+        beneficiaryName: s.beneficiaryName || null,
+        beneficiaryPhone: s.beneficiaryPhone || null,
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+      })),
+      totalServices,
+      message,
+    });
+  } catch (error: any) {
+    console.error("GetUser error:", error);
     if (!res.headersSent) {
       res.status(500).json({ error: { message: error.message || "Internal server error", status: "INTERNAL" } });
     }
