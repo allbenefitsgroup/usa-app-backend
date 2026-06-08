@@ -150,6 +150,12 @@ app.put("/api/admin/services/:id", requireAuth, handleUpdateService);
 app.delete("/api/admin/services/:id", requireAuth, handleDeleteService);
 app.post("/api/admin/services/bulk", requireAuth, handleBulkImportServices);
 
+// Alias for frontend compatibility
+app.post("/api/admin/client-services", requireAuth, handleCreateService);
+app.get("/api/admin/client-services", requireAuth, handleListAllServices);
+app.put("/api/admin/client-services/:id", requireAuth, handleUpdateService);
+app.delete("/api/admin/client-services/:id", requireAuth, handleDeleteService);
+
 // Protected business endpoints
 app.post("/api/syncUserProfile", requireAuth, wrapHandler(handleSyncUserProfile));
 app.post("/api/createCheckoutSession", requireAuth, wrapHandler(handleCreateCheckoutSession));

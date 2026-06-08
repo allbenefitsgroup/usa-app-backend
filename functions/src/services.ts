@@ -100,7 +100,14 @@ export async function handleCreateService(req: Request, res: Response) {
     }
 
     const validStatuses = ["active", "expired", "cancelled", "pending"];
-    const status = body.status || "active";
+    const statusMap: Record<string, string> = {
+      "Activo": "active",
+      "Vencido": "expired",
+      "Cancelado": "cancelled",
+      "Pendiente": "pending",
+    };
+    const rawStatus = body.status || "active";
+    const status = statusMap[rawStatus] || rawStatus;
     if (!validStatuses.includes(status)) {
       res.status(400).json({ error: { message: `status must be one of: ${validStatuses.join(", ")}.`, status: "INVALID_ARGUMENT" } });
       return;
@@ -117,12 +124,12 @@ export async function handleCreateService(req: Request, res: Response) {
       serviceType: body.serviceType ? body.serviceType.trim() : null,
       policyNumber: body.policyNumber ? body.policyNumber.trim() : null,
       contractDate: body.contractDate,
-      expiryDate: body.expiryDate || null,
+      expiryDate: body.expiryDate || body.expirationDate || null,
       status,
       coverageAmount: typeof body.coverageAmount === "number" ? body.coverageAmount : null,
       premiumAmount: typeof body.premiumAmount === "number" ? body.premiumAmount : null,
       currency: body.currency ? body.currency.trim().toUpperCase() : null,
-      notes: body.notes ? body.notes.trim() : null,
+      notes: body.notes || body.details || null,
       beneficiaryName: body.beneficiaryName ? body.beneficiaryName.trim() : null,
       beneficiaryPhone: body.beneficiaryPhone ? body.beneficiaryPhone.trim() : null,
       createdAt: now,
@@ -230,6 +237,13 @@ export async function handleUpdateService(req: Request, res: Response) {
     const expressionAttributeNames: Record<string, string> = {};
     const expressionAttributeValues: Record<string, any> = {};
 
+    const statusMap: Record<string, string> = {
+      "Activo": "active",
+      "Vencido": "expired",
+      "Cancelado": "cancelled",
+      "Pendiente": "pending",
+    };
+
     const fields: Record<string, string> = {
       userId: "userId",
       userEmail: "userEmail",
@@ -247,16 +261,29 @@ export async function handleUpdateService(req: Request, res: Response) {
       beneficiaryPhone: "beneficiaryPhone",
     };
 
+    // Alias mappings
+    const aliasMap: Record<string, string> = {
+      expirationDate: "expiryDate",
+      details: "notes",
+    };
+
     for (const [key, attrName] of Object.entries(fields)) {
-      if (body[key] !== undefined) {
+      let value = body[key];
+      // Check for alias if primary key is missing
+      if (value === undefined && aliasMap[key]) {
+        value = body[aliasMap[key]];
+      }
+      if (value !== undefined) {
         const safeKey = key.replace(/[^a-zA-Z0-9]/g, "");
         updateExpressions.push(`#${safeKey} = :${safeKey}`);
         expressionAttributeNames[`#${safeKey}`] = attrName;
-        let value = body[key];
         if (typeof value === "string" && (key === "userEmail" || key === "currency")) {
           value = value.toLowerCase().trim();
         } else if (typeof value === "string") {
           value = value.trim();
+        }
+        if (key === "status" && typeof value === "string") {
+          value = statusMap[value] || value;
         }
         expressionAttributeValues[`:${safeKey}`] = value;
       }
