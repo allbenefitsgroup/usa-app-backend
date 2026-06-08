@@ -1,5 +1,4 @@
 import sgMail from "@sendgrid/mail";
-import * as logger from "firebase-functions/logger";
 import { formatMoney } from "./money";
 
 interface CourseEmailInput {
@@ -16,7 +15,7 @@ interface CourseEmailInput {
 
 function canSendEmail(input: CourseEmailInput): boolean {
   if (!input.apiKey || !input.supportEmail) {
-    logger.warn("Email was skipped because EMAIL_API_KEY or SUPPORT_EMAIL is missing.");
+    console.warn("Email was skipped because EMAIL_API_KEY or SUPPORT_EMAIL is missing.");
     return false;
   }
 

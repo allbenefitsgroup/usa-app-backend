@@ -1,4 +1,4 @@
-import { Timestamp } from "firebase-admin/firestore";
+export type Timestamp = string;
 
 export type UserRole = "client" | "customer" | "student" | "seller";
 
@@ -118,4 +118,37 @@ export interface Recommendation {
   order: number;
   createdAt: Timestamp;
   updatedAt?: Timestamp;
+}
+
+export type ServiceStatus = "active" | "expired" | "cancelled" | "pending";
+
+export interface ClientService {
+  id: string;
+  userId: string;
+  userEmail?: string | null;
+  serviceName: string;
+  serviceType?: string | null;
+  policyNumber?: string | null;
+  contractDate: Timestamp;
+  expiryDate?: Timestamp | null;
+  status: ServiceStatus;
+  coverageAmount?: number | null;
+  premiumAmount?: number | null;
+  currency?: string | null;
+  notes?: string | null;
+  beneficiaryName?: string | null;
+  beneficiaryPhone?: string | null;
+  catalogItemId?: string | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface ServiceCatalogItem {
+  id: string;
+  name: string;
+  type?: string | null;
+  description?: string | null;
+  active: boolean;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }

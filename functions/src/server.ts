@@ -28,8 +28,24 @@ import {
   handleAdminLogin,
   handleGetMe,
   handleLogout,
+  handleListUsers,
 } from "./auth";
 import { uploadImageToS3 } from "./s3Upload";
+import {
+  handleGetMyServices,
+  handleCreateService,
+  handleListAllServices,
+  handleUpdateService,
+  handleDeleteService,
+  handleBulkImportServices,
+} from "./services";
+import {
+  handleListServiceCatalog,
+  handleListAllCatalogItems,
+  handleCreateCatalogItem,
+  handleUpdateCatalogItem,
+  handleDeleteCatalogItem,
+} from "./serviceCatalog";
 
 const app = express();
 
@@ -110,6 +126,26 @@ app.post("/api/auth/admin/login", (req, res, next) => { handleAdminLogin(req, re
 app.post("/api/auth/logout", handleLogout);
 app.get("/api/auth/me", requireAuth, (req, res, next) => { handleGetMe(req, res).catch(next); });
 
+// Service catalog (public list of available services)
+app.get("/api/service-catalog", handleListServiceCatalog);
+
+// Admin service catalog CRUD
+app.get("/api/admin/service-catalog", requireAuth, handleListAllCatalogItems);
+app.post("/api/admin/service-catalog", requireAuth, handleCreateCatalogItem);
+app.put("/api/admin/service-catalog/:id", requireAuth, handleUpdateCatalogItem);
+app.delete("/api/admin/service-catalog/:id", requireAuth, handleDeleteCatalogItem);
+
+// Admin users list (with optional role filter)
+app.get("/api/admin/users", requireAuth, handleListUsers);
+
+// Client services endpoints
+app.get("/api/my-services", requireAuth, handleGetMyServices);
+app.post("/api/admin/services", requireAuth, handleCreateService);
+app.get("/api/admin/services", requireAuth, handleListAllServices);
+app.put("/api/admin/services/:id", requireAuth, handleUpdateService);
+app.delete("/api/admin/services/:id", requireAuth, handleDeleteService);
+app.post("/api/admin/services/bulk", requireAuth, handleBulkImportServices);
+
 // Protected business endpoints
 app.post("/api/syncUserProfile", requireAuth, wrapHandler(handleSyncUserProfile));
 app.post("/api/createCheckoutSession", requireAuth, wrapHandler(handleCreateCheckoutSession));
@@ -133,6 +169,31 @@ app.get("/api/recommendations", async (_req: Request, res: Response) => {
   }
 });
 
+// Helper to handle image from multipart or base64 JSON
+async function resolveImageUrl(req: Request): Promise<string | null> {
+  // 1. If multer uploaded a file
+  if ((req as any).file) {
+    const f = (req as any).file;
+    return uploadImageToS3(f.buffer, f.originalname, f.mimetype);
+  }
+
+  // 2. If JSON body contains a base64 data URI
+  const imageUrl = req.body?.imageUrl;
+  if (typeof imageUrl === "string" && imageUrl.startsWith("data:")) {
+    const matches = imageUrl.match(/^data:(.+);base64,(.+)$/);
+    if (matches) {
+      const mimeType = matches[1];
+      const base64Data = matches[2];
+      const buffer = Buffer.from(base64Data, "base64");
+      const ext = mimeType.split("/").pop() || "png";
+      return uploadImageToS3(buffer, `image.${ext}`, mimeType);
+    }
+  }
+
+  // 3. Otherwise return the provided URL or null
+  return imageUrl || null;
+}
+
 // Admin CRUD for recommendations (only sellers)
 app.get("/api/admin/recommendations", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
   try {
@@ -145,12 +206,9 @@ app.get("/api/admin/recommendations", requireAuth, requireAdmin, async (_req: Re
 });
 app.post("/api/admin/recommendations", upload.single("image"), async (req: Request, res: Response) => {
   try {
-    let imageUrl: string | null = null;
-    if (req.file) {
-      imageUrl = await uploadImageToS3(req.file.buffer, req.file.originalname, req.file.mimetype);
-    }
+    const imageUrl = await resolveImageUrl(req);
 
-    const body = req.body;
+    const body = req.body || {};
     const request: ApiRequest<any> = {
       data: {
         title: body.title,
@@ -181,12 +239,9 @@ app.post("/api/admin/recommendations", upload.single("image"), async (req: Reque
 });
 app.put("/api/admin/recommendations/:id", requireAuth, requireAdmin, upload.single("image"), async (req: Request, res: Response) => {
   try {
-    let imageUrl: string | null = null;
-    if (req.file) {
-      imageUrl = await uploadImageToS3(req.file.buffer, req.file.originalname, req.file.mimetype);
-    }
+    const imageUrl = await resolveImageUrl(req);
 
-    const body = req.body;
+    const body = req.body || {};
     const request: ApiRequest<any> = {
       data: {
         id: req.params.id,

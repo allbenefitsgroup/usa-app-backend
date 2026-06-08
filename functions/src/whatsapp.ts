@@ -1,12 +1,5 @@
-import * as logger from "firebase-functions/logger";
-
 // WARNING: @open-wa/wa-automate uses Puppeteer (headless Chrome).
-// It does NOT work in Firebase Functions serverless environment.
 // For production WhatsApp messaging, use the WhatsApp Business API (Meta) instead.
-// This module is kept for local development only.
-
-const isEmulator = !!process.env.FUNCTIONS_EMULATOR;
-const isLocalServer = !process.env.K_SERVICE && !isEmulator;
 
 let waAutomateModule: any = null;
 let whatsappClient: any = null;
@@ -20,17 +13,10 @@ async function getWaAutomate() {
 
 /**
  * Initialize WhatsApp client. Must be called before sending messages.
- * In development, this scans a QR code. In production, session is persisted.
- * NOTE: This will NOT work inside Firebase Functions. Only run locally.
  */
 export async function initializeWhatsappClient(): Promise<any> {
   if (whatsappClient) {
     return whatsappClient;
-  }
-
-  if (!isLocalServer) {
-    logger.warn("WhatsApp Web client initialization skipped in serverless environment.");
-    return null;
   }
 
   try {
@@ -44,10 +30,10 @@ export async function initializeWhatsappClient(): Promise<any> {
       browserArgs: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
 
-    logger.info("WhatsApp client initialized successfully");
+    console.log("WhatsApp client initialized successfully");
     return whatsappClient;
   } catch (error) {
-    logger.error("Failed to initialize WhatsApp client", error);
+    console.error("Failed to initialize WhatsApp client", error);
     throw error;
   }
 }
@@ -58,11 +44,6 @@ export async function initializeWhatsappClient(): Promise<any> {
  * @param message - Message text to send
  */
 export async function sendWhatsappMessage(phoneNumber: string, message: string): Promise<boolean> {
-  if (!isLocalServer) {
-    logger.warn("WhatsApp message skipped in serverless environment.", { phoneNumber });
-    return false;
-  }
-
   try {
     if (!whatsappClient) {
       whatsappClient = await initializeWhatsappClient();
@@ -78,14 +59,14 @@ export async function sendWhatsappMessage(phoneNumber: string, message: string):
 
     const result = await whatsappClient.sendText(formattedPhone, message);
 
-    logger.info("WhatsApp message sent successfully", {
+    console.log("WhatsApp message sent successfully", {
       phoneNumber,
       messageLength: message.length,
     });
 
     return !!result;
   } catch (error) {
-    logger.error("Failed to send WhatsApp message", {
+    console.error("Failed to send WhatsApp message", {
       phoneNumber,
       error,
     });
@@ -101,9 +82,9 @@ export async function closeWhatsappClient(): Promise<void> {
     try {
       await whatsappClient.kill();
       whatsappClient = null;
-      logger.info("WhatsApp client closed");
+      console.log("WhatsApp client closed");
     } catch (error) {
-      logger.error("Error closing WhatsApp client", error);
+      console.error("Error closing WhatsApp client", error);
     }
   }
 }

@@ -2,18 +2,41 @@ openapi: 3.0.0
 info:
   title: USA All Benefits Group Backend API
   description: |
-    Backend REST para registro de usuarios, pagos Stripe, cursos y notificaciones WhatsApp.
-    Auth propio con JWT.
-  version: 1.0.0
+    Backend REST para registro de usuarios, pagos Stripe, cursos, notificaciones WhatsApp,
+    recomendaciones, catálogo de servicios y gestión de servicios contratados por clientes.
+    Auth propio con JWT. Ejecutado en AWS EC2.
+  version: 2.0.0
   contact:
     name: USA All Benefits Group
+
 servers:
+  - url: http://ec2-100-48-16-180.compute-1.amazonaws.com:3000
+    description: Servidor AWS EC2 (produccion)
   - url: http://localhost:3000
     description: Servidor local (Express)
-  - url: https://us-central1-TU_PROJECT_ID.cloudfunctions.net/api
-    description: Firebase Cloud Functions (produccion)
 
 paths:
+  /:
+    get:
+      summary: Health check
+      description: Verifica que el servidor este corriendo.
+      tags:
+        - System
+      responses:
+        "200":
+          description: Servidor OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  service:
+                    type: string
+                    example: "usa-app-backend"
+
   /api/auth/register:
     post:
       summary: Registrar un nuevo usuario
@@ -144,6 +167,77 @@ paths:
         "401":
           description: Credenciales invalidas
 
+  /api/auth/admin/login:
+    post:
+      summary: Login de administrador
+      description: Login con credenciales hardcoded (admin/admin).
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  example: "admin"
+                password:
+                  type: string
+                  example: "admin"
+      responses:
+        "200":
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  token:
+                    type: string
+                  user:
+                    type: object
+                    properties:
+                      uid:
+                        type: string
+                      name:
+                        type: string
+                      email:
+                        type: string
+                      role:
+                        type: string
+        "401":
+          description: Credenciales invalidas
+
+  /api/auth/logout:
+    post:
+      summary: Cerrar sesion
+      description: Revoca el token JWT enviado en el header.
+      tags:
+        - Auth
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Sesion cerrada exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  message:
+                    type: string
+        "401":
+          description: No autenticado
+
   /api/auth/me:
     get:
       summary: Obtener perfil del usuario autenticado
@@ -176,14 +270,242 @@ paths:
         "404":
           description: Usuario no encontrado
 
-  /api/syncUserProfile:
-    post:
-      summary: Sincronizar perfil de usuario
-      description: |
-        Guarda o actualiza nombre, telefono y rol del usuario.
-        El rol solo se puede definir una vez; despues no se permite cambiarlo.
+  /api/recommendations:
+    get:
+      summary: Obtener recomendaciones publicas
+      description: Devuelve recomendaciones rotativas (tips/planes).
       tags:
-        - Users
+        - Recommendations
+      responses:
+        "200":
+          description: Lista de recomendaciones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    properties:
+                      recommendations:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            title:
+                              type: string
+                            subtitle:
+                              type: string
+                            type:
+                              type: string
+                            imageUrl:
+                              type: string
+                              nullable: true
+                            color:
+                              type: string
+                              nullable: true
+                            icon:
+                              type: string
+                              nullable: true
+                            ctaLabel:
+                              type: string
+                              nullable: true
+                            ctaLink:
+                              type: string
+                              nullable: true
+                      activeIndex:
+                        type: integer
+                      total:
+                        type: integer
+                      updatedAt:
+                        type: string
+
+  /api/admin/recommendations:
+    get:
+      summary: Listar todas las recomendaciones (admin)
+      description: Devuelve todas las recomendaciones para gestion.
+      tags:
+        - Recommendations
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Lista completa
+        "401":
+          description: No autenticado
+        "403":
+          description: Sin permisos
+    post:
+      summary: Crear recomendacion (admin)
+      description: Crea una nueva recomendacion. Se puede subir imagen como multipart/form-data o base64.
+      tags:
+        - Recommendations
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                subtitle:
+                  type: string
+                type:
+                  type: string
+                  enum: [instagram, youtube, general]
+                externalUrl:
+                  type: string
+                imageUrl:
+                  type: string
+                color:
+                  type: string
+                icon:
+                  type: string
+                ctaLabel:
+                  type: string
+                ctaLink:
+                  type: string
+                active:
+                  type: string
+                  example: "true"
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Recomendacion creada
+        "401":
+          description: No autenticado
+        "403":
+          description: Sin permisos
+
+  /api/admin/recommendations/{id}:
+    put:
+      summary: Actualizar recomendacion (admin)
+      tags:
+        - Recommendations
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Recomendacion actualizada
+        "404":
+          description: No encontrada
+    delete:
+      summary: Eliminar recomendacion (admin)
+      tags:
+        - Recommendations
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Eliminada
+        "404":
+          description: No encontrada
+
+  /api/admin/recommendations/reorder:
+    put:
+      summary: Reordenar recomendaciones (admin)
+      tags:
+        - Recommendations
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      order:
+                        type: integer
+      responses:
+        "200":
+          description: Orden actualizado
+
+  /api/service-catalog:
+    get:
+      summary: Listar servicios disponibles (publico)
+      description: Devuelve el catalogo de productos/planes que la empresa ofrece.
+      tags:
+        - Service Catalog
+      responses:
+        "200":
+          description: Catalogo de servicios
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  catalog:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        type:
+                          type: string
+                          nullable: true
+                        description:
+                          type: string
+                          nullable: true
+                        active:
+                          type: boolean
+
+  /api/admin/service-catalog:
+    get:
+      summary: Listar todo el catalogo (admin)
+      description: Incluye activos e inactivos.
+      tags:
+        - Service Catalog
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Catalogo completo
+        "401":
+          description: No autenticado
+        "403":
+          description: Sin permisos
+    post:
+      summary: Crear item en catalogo (admin)
+      description: Agrega un nuevo tipo de servicio/producto al catalogo.
+      tags:
+        - Service Catalog
       security:
         - bearerAuth: []
       requestBody:
@@ -197,45 +519,165 @@ paths:
               properties:
                 name:
                   type: string
-                  example: "Juan Perez"
-                phone:
+                  example: "Seguro Dental Individual"
+                type:
                   type: string
-                  nullable: true
-                  example: "+13051234567"
-                role:
+                  example: "Dental"
+                description:
                   type: string
-                  enum:
-                    - client
-                    - customer
-                    - student
-                    - seller
-                  example: "client"
+                  example: "Cobertura dental completa"
+                active:
+                  type: boolean
+                  default: true
+      responses:
+        "201":
+          description: Item creado
+        "400":
+          description: Datos invalidos
+        "401":
+          description: No autenticado
+        "403":
+          description: Sin permisos
+
+  /api/admin/service-catalog/{id}:
+    put:
+      summary: Actualizar item de catalogo (admin)
+      tags:
+        - Service Catalog
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                description:
+                  type: string
+                active:
+                  type: boolean
       responses:
         "200":
-          description: Perfil sincronizado
+          description: Item actualizado
+        "404":
+          description: No encontrado
+    delete:
+      summary: Eliminar item de catalogo (admin)
+      tags:
+        - Service Catalog
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Eliminado
+        "404":
+          description: No encontrado
+
+  /api/my-services:
+    get:
+      summary: Ver mis servicios contratados (cliente)
+      description: Devuelve todos los servicios asignados al usuario autenticado. Busca por uid y fallback por email.
+      tags:
+        - Client Services
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Lista de servicios del cliente
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  result:
-                    type: object
-                    properties:
-                      ok:
-                        type: boolean
+                  ok:
+                    type: boolean
+                  services:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        serviceName:
+                          type: string
+                        serviceType:
+                          type: string
+                          nullable: true
+                        policyNumber:
+                          type: string
+                          nullable: true
+                        contractDate:
+                          type: string
+                          nullable: true
+                        expiryDate:
+                          type: string
+                          nullable: true
+                        status:
+                          type: string
+                          enum: [active, expired, cancelled, pending]
+                        coverageAmount:
+                          type: number
+                          nullable: true
+                        premiumAmount:
+                          type: number
+                          nullable: true
+                        currency:
+                          type: string
+                          nullable: true
+                        notes:
+                          type: string
+                          nullable: true
+                        beneficiaryName:
+                          type: string
+                          nullable: true
+                        beneficiaryPhone:
+                          type: string
+                          nullable: true
+                        createdAt:
+                          type: string
+                        updatedAt:
+                          type: string
         "401":
           description: No autenticado
-        "400":
-          description: Datos invalidos
 
-  /api/createCheckoutSession:
-    post:
-      summary: Crear sesion de pago Stripe
-      description: |
-        Crea una compra en estado `pending` y una sesion de Stripe Checkout.
-        Devuelve la URL para redirigir al usuario.
+  /api/admin/services:
+    get:
+      summary: Listar todos los servicios contratados (admin)
+      description: Devuelve todos los servicios de todos los clientes.
       tags:
-        - Payments
+        - Client Services
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Lista completa
+        "401":
+          description: No autenticado
+        "403":
+          description: Sin permisos
+    post:
+      summary: Crear servicio para un cliente (admin)
+      description: |
+        Asigna un servicio individual a un cliente con datos completamente personalizados
+        (numero de poliza, fechas, precio, beneficiarios, etc.).
+      tags:
+        - Client Services
       security:
         - bearerAuth: []
       requestBody:
@@ -246,49 +688,95 @@ paths:
               type: object
               required:
                 - userId
-                - courseId
+                - serviceName
+                - contractDate
               properties:
                 userId:
                   type: string
+                  description: UID del cliente
                   example: "abc123"
-                courseId:
+                userEmail:
                   type: string
-                  example: "course_001"
+                  format: email
+                  nullable: true
+                  example: "cliente@example.com"
+                serviceName:
+                  type: string
+                  description: Nombre del servicio (puede ser del catalogo o personalizado)
+                  example: "Indexed Universal Life (IUL)"
+                serviceType:
+                  type: string
+                  nullable: true
+                  example: "IUL"
+                policyNumber:
+                  type: string
+                  nullable: true
+                  example: "POL-IUL-2024-001"
+                contractDate:
+                  type: string
+                  format: date
+                  example: "2024-01-15"
+                expiryDate:
+                  type: string
+                  format: date
+                  nullable: true
+                  example: "2034-01-15"
+                status:
+                  type: string
+                  enum: [active, expired, cancelled, pending]
+                  default: "active"
+                coverageAmount:
+                  type: number
+                  nullable: true
+                  example: 500000
+                premiumAmount:
+                  type: number
+                  nullable: true
+                  example: 25000
+                currency:
+                  type: string
+                  nullable: true
+                  example: "USD"
+                notes:
+                  type: string
+                  nullable: true
+                  example: "Cliente legacy importado"
+                beneficiaryName:
+                  type: string
+                  nullable: true
+                  example: "Maria Garcia"
+                beneficiaryPhone:
+                  type: string
+                  nullable: true
+                  example: "+1234567890"
+                catalogItemId:
+                  type: string
+                  nullable: true
+                  description: ID del item del catalogo asociado
       responses:
-        "200":
-          description: Sesion creada
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  result:
-                    type: object
-                    properties:
-                      checkoutUrl:
-                        type: string
-                        format: uri
-                      sessionId:
-                        type: string
-                      purchaseId:
-                        type: string
+        "201":
+          description: Servicio creado
+        "400":
+          description: Datos invalidos
         "401":
           description: No autenticado
-        "404":
-          description: Curso no encontrado
         "403":
-          description: No puede crear checkout para otro usuario
+          description: Sin permisos
 
-  /api/getMyCourseAccess:
-    post:
-      summary: Obtener mis compras y acceso a cursos
-      description: |
-        Lista todas las compras del usuario autenticado con su estado
-        (`pending`, `paid`, `failed`, `refunded`) y datos del curso.
+  /api/admin/services/{id}:
+    put:
+      summary: Actualizar servicio de cliente (admin)
+      description: Edita cualquier campo de un servicio ya asignado.
       tags:
-        - Payments
+        - Client Services
       security:
         - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
@@ -296,53 +784,137 @@ paths:
               type: object
       responses:
         "200":
-          description: Lista de compras
+          description: Servicio actualizado
+        "401":
+          description: No autenticado
+        "403":
+          description: Sin permisos
+        "404":
+          description: No encontrado
+    delete:
+      summary: Eliminar servicio de cliente (admin)
+      tags:
+        - Client Services
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Eliminado
+        "401":
+          description: No autenticado
+        "403":
+          description: Sin permisos
+        "404":
+          description: No encontrado
+
+  /api/admin/services/bulk:
+    post:
+      summary: Importar servicios masivamente (admin)
+      description: Recibe un array de servicios y los crea todos de una vez.
+      tags:
+        - Client Services
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - services
+              properties:
+                services:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - userId
+                      - serviceName
+                      - contractDate
+                    properties:
+                      userId:
+                        type: string
+                      userEmail:
+                        type: string
+                        nullable: true
+                      serviceName:
+                        type: string
+                      serviceType:
+                        type: string
+                        nullable: true
+                      policyNumber:
+                        type: string
+                        nullable: true
+                      contractDate:
+                        type: string
+                      expiryDate:
+                        type: string
+                        nullable: true
+                      status:
+                        type: string
+                        enum: [active, expired, cancelled, pending]
+                      coverageAmount:
+                        type: number
+                        nullable: true
+                      premiumAmount:
+                        type: number
+                        nullable: true
+                      currency:
+                        type: string
+                        nullable: true
+                      notes:
+                        type: string
+                        nullable: true
+                      beneficiaryName:
+                        type: string
+                        nullable: true
+                      beneficiaryPhone:
+                        type: string
+                        nullable: true
+      responses:
+        "201":
+          description: Importacion completada
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  result:
-                    type: object
-                    properties:
-                      purchases:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id:
-                              type: string
-                            userId:
-                              type: string
-                            courseId:
-                              type: string
-                            status:
-                              type: string
-                            amount:
-                              type: integer
-                            currency:
-                              type: string
-                            customerEmail:
-                              type: string
-                            createdAt:
-                              type: integer
-                              nullable: true
-                            paidAt:
-                              type: integer
-                              nullable: true
-                            course:
-                              type: object
-                              nullable: true
-                            canViewContent:
-                              type: boolean
+                  ok:
+                    type: boolean
+                  imported:
+                    type: integer
+                  failed:
+                    type: integer
+                  ids:
+                    type: array
+                    items:
+                      type: string
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index:
+                          type: integer
+                        reason:
+                          type: string
         "401":
           description: No autenticado
+        "403":
+          description: Sin permisos
 
   /api/requestProductInfo:
     post:
       summary: Solicitar informacion de producto
       description: |
-        Crea un lead y envia un mensaje de confirmacion por WhatsApp.
+        Crea un lead y genera enlace de WhatsApp para contactar al vendedor.
         No requiere autenticacion, pero si se envia un token se asocia al lead.
       tags:
         - Leads
@@ -461,6 +1033,16 @@ paths:
           description: Firma invalida
         "405":
           description: Metodo no permitido
+
+  /docs:
+    get:
+      summary: Documentacion Swagger UI
+      description: Interfaz web para explorar la API.
+      tags:
+        - System
+      responses:
+        "200":
+          description: Pagina HTML con Swagger UI
 
 components:
   securitySchemes:

@@ -349,6 +349,75 @@ export async function handleGetMe(req: Request, res: Response) {
   }
 }
 
+export async function handleListUsers(req: Request, res: Response) {
+  try {
+    const authContext = (req as any).authContext as AuthContext | undefined;
+    if (!authContext) {
+      res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
+      return;
+    }
+
+    const allowedRoles = ["seller", "admin"];
+    if (!allowedRoles.includes(authContext.role || "")) {
+      res.status(403).json({ error: { message: "Forbidden: admin access required.", status: "PERMISSION_DENIED" } });
+      return;
+    }
+
+    const roleFilter = typeof req.query.role === "string" ? req.query.role.trim() : null;
+    const validRoles = ["client", "customer", "student", "seller"];
+    if (roleFilter && !validRoles.includes(roleFilter)) {
+      res.status(400).json({ error: { message: `role must be one of: ${validRoles.join(", ")}.`, status: "INVALID_ARGUMENT" } });
+      return;
+    }
+
+    let lastEvaluatedKey: Record<string, any> | undefined = undefined;
+    const users: Record<string, any>[] = [];
+
+    do {
+      const scanResult: any = await ddb.send(
+        new ScanCommand({
+          TableName: USERS_TABLE,
+          ...(roleFilter
+            ? {
+                FilterExpression: "#r = :role",
+                ExpressionAttributeNames: { "#r": "role" },
+                ExpressionAttributeValues: { ":role": roleFilter },
+              }
+            : {}),
+          ExclusiveStartKey: lastEvaluatedKey,
+        })
+      );
+
+      if (scanResult.Items && scanResult.Items.length > 0) {
+        users.push(...scanResult.Items);
+      }
+
+      lastEvaluatedKey = scanResult.LastEvaluatedKey;
+    } while (lastEvaluatedKey);
+
+    users.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+
+    res.json({
+      ok: true,
+      users: users.map((u) => ({
+        uid: u.uid,
+        name: u.name,
+        email: u.email,
+        phone: u.phone || null,
+        role: u.role,
+        createdAt: u.createdAt || null,
+        updatedAt: u.updatedAt || null,
+      })),
+      total: users.length,
+    });
+  } catch (error: any) {
+    console.error("ListUsers error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: { message: error.message || "Internal server error", status: "INTERNAL" } });
+    }
+  }
+}
+
 export async function handleLogout(req: Request, res: Response) {
   try {
     const authHeader = req.headers.authorization;
