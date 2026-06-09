@@ -435,6 +435,12 @@ export async function handleGetUser(req: Request, res: Response) {
       email: user.email,
       phone: user.phone || null,
       role: user.role,
+      title: user.title || null,
+      position: user.position || null,
+      description: user.description || null,
+      location: user.location || null,
+      rating: user.rating || null,
+      specialties: user.specialties || [],
     };
 
     // Buscar servicios por userId
@@ -542,6 +548,12 @@ export async function handleGetUserPublic(req: Request, res: Response) {
       email: user.email,
       phone: user.phone || null,
       role: user.role,
+      title: user.title || null,
+      position: user.position || null,
+      description: user.description || null,
+      location: user.location || null,
+      rating: user.rating || null,
+      specialties: user.specialties || [],
     };
 
     // Buscar servicios por userId
@@ -706,6 +718,12 @@ export async function handleListUsers(req: Request, res: Response) {
         email: u.email,
         phone: u.phone || null,
         role: u.role,
+        title: u.title || null,
+        position: u.position || null,
+        description: u.description || null,
+        location: u.location || null,
+        rating: u.rating || null,
+        specialties: u.specialties || [],
         createdAt: u.createdAt || null,
         updatedAt: u.updatedAt || null,
       })),
