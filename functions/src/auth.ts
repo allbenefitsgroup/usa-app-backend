@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { promisify } from "util";
 import jwt from "jsonwebtoken";
-import { GetCommand, PutCommand, ScanCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, PutCommand, ScanCommand, DeleteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { ddb, USERS_TABLE, REVOKED_TOKENS_TABLE, SERVICES_TABLE } from "./dynamodb";
 import { jwtSecret } from "./config";
 
@@ -791,6 +791,135 @@ export async function handleDeleteUser(req: Request, res: Response) {
     res.json({ ok: true, id });
   } catch (error: any) {
     console.error("DeleteUser error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: { message: error.message || "Internal server error", status: "INTERNAL" } });
+    }
+  }
+}
+
+export async function handleUpdateUserProfile(req: Request, res: Response) {
+  try {
+    const authContext = (req as any).authContext as AuthContext | undefined;
+    if (!authContext) {
+      res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
+      return;
+    }
+
+    const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: { message: "id is required.", status: "INVALID_ARGUMENT" } });
+      return;
+    }
+
+    // Allow if admin/seller OR if editing own profile
+    const isAdmin = ["seller", "admin"].includes(authContext.role || "");
+    const isSelf = authContext.uid === id;
+    if (!isAdmin && !isSelf) {
+      res.status(403).json({ error: { message: "Forbidden: you can only edit your own profile.", status: "PERMISSION_DENIED" } });
+      return;
+    }
+
+    // Verify user exists
+    const getResult = await ddb.send(
+      new GetCommand({
+        TableName: USERS_TABLE,
+        Key: { uid: id },
+      })
+    );
+
+    if (!getResult.Item) {
+      res.status(404).json({ error: { message: "User not found.", status: "NOT_FOUND" } });
+      return;
+    }
+
+    const body = req.body;
+    const updateExpressions: string[] = [];
+    const expressionAttributeNames: Record<string, string> = {};
+    const expressionAttributeValues: Record<string, any> = {};
+
+    const stringFields: Record<string, string> = {
+      name: "name",
+      email: "email",
+      phone: "phone",
+      description: "description",
+      location: "location",
+      title: "title",
+      position: "position",
+    };
+
+    for (const [key, attrName] of Object.entries(stringFields)) {
+      if (body[key] !== undefined) {
+        const safeKey = key.replace(/[^a-zA-Z0-9]/g, "");
+        updateExpressions.push(`#${safeKey} = :${safeKey}`);
+        expressionAttributeNames[`#${safeKey}`] = attrName;
+        let value = body[key];
+        if (typeof value === "string") {
+          if (key === "email") {
+            value = value.toLowerCase().trim();
+          } else {
+            value = value.trim();
+          }
+        }
+        expressionAttributeValues[`:${safeKey}`] = value;
+      }
+    }
+
+    // Specialties: array, max 5 items
+    if (body.specialties !== undefined) {
+      let specialties = body.specialties;
+      if (typeof specialties === "string") {
+        try {
+          specialties = JSON.parse(specialties);
+        } catch {
+          specialties = [specialties];
+        }
+      }
+      if (!Array.isArray(specialties)) {
+        res.status(400).json({ error: { message: "specialties must be an array.", status: "INVALID_ARGUMENT" } });
+        return;
+      }
+      if (specialties.length > 5) {
+        res.status(400).json({ error: { message: "specialties can have at most 5 items.", status: "INVALID_ARGUMENT" } });
+        return;
+      }
+      updateExpressions.push("#specialties = :specialties");
+      expressionAttributeNames["#specialties"] = "specialties";
+      expressionAttributeValues[":specialties"] = specialties.map((s: any) => String(s).trim()).filter(Boolean);
+    }
+
+    // Rating: number
+    if (body.rating !== undefined) {
+      const rating = typeof body.rating === "string" ? parseFloat(body.rating) : body.rating;
+      if (typeof rating !== "number" || isNaN(rating) || rating < 0 || rating > 5) {
+        res.status(400).json({ error: { message: "rating must be a number between 0 and 5.", status: "INVALID_ARGUMENT" } });
+        return;
+      }
+      updateExpressions.push("#rating = :rating");
+      expressionAttributeNames["#rating"] = "rating";
+      expressionAttributeValues[":rating"] = rating;
+    }
+
+    if (updateExpressions.length === 0) {
+      res.json({ ok: true, id, message: "No changes to update." });
+      return;
+    }
+
+    updateExpressions.push("updatedAt = :now");
+    expressionAttributeValues[":now"] = new Date().toISOString();
+
+    await ddb.send(
+      new UpdateCommand({
+        TableName: USERS_TABLE,
+        Key: { uid: id },
+        UpdateExpression: "set " + updateExpressions.join(", "),
+        ExpressionAttributeNames: expressionAttributeNames,
+        ExpressionAttributeValues: expressionAttributeValues,
+      })
+    );
+
+    res.json({ ok: true, id });
+  } catch (error: any) {
+    console.error("UpdateUserProfile error:", error);
     if (!res.headersSent) {
       res.status(500).json({ error: { message: error.message || "Internal server error", status: "INTERNAL" } });
     }

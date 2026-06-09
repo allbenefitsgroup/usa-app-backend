@@ -12,6 +12,13 @@ export interface UserProfile {
   phone?: string | null;
   role?: UserRole | null;
   passwordHash?: string | null;
+  description?: string | null;
+  location?: string | null;
+  title?: string | null;
+  position?: string | null;
+  specialties?: string[] | null;
+  startDate?: Timestamp | null;
+  rating?: number | null;
   createdAt: Timestamp;
   updatedAt?: Timestamp;
 }

@@ -33,6 +33,7 @@ import {
   handleCreateUser,
   handleGetUser,
   handleGetUserPublic,
+  handleUpdateUserProfile,
 } from "./auth";
 import { uploadImageToS3 } from "./s3Upload";
 import {
@@ -148,6 +149,9 @@ app.delete("/api/admin/users/:id", requireAuth, handleDeleteUser);
 
 // Public user endpoint (for any authenticated user)
 app.get("/api/users/:id", requireAuth, handleGetUserPublic);
+
+// Update user profile (seller data: name, title, description, location, rating, specialties, phone, email)
+app.put("/api/users/:id/profile", requireAuth, handleUpdateUserProfile);
 
 // QR endpoint for seller data (operator shows QR to client)
 // Public: no auth required, so anyone can request/generate a QR code
