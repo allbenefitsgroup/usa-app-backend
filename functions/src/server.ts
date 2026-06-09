@@ -43,6 +43,7 @@ import {
   handleDeleteService,
   handleBulkImportServices,
 } from "./services";
+import { handleGenerateSellerQR, handleGetPublicSellerProfile } from "./qr";
 import {
   handleListServiceCatalog,
   handleListAllCatalogItems,
@@ -147,6 +148,13 @@ app.delete("/api/admin/users/:id", requireAuth, handleDeleteUser);
 
 // Public user endpoint (for any authenticated user)
 app.get("/api/users/:id", requireAuth, handleGetUserPublic);
+
+// QR endpoint for seller data (operator shows QR to client)
+// Public: no auth required, so anyone can request/generate a QR code
+app.get("/api/sellers/:id/qr", handleGenerateSellerQR);
+
+// Public seller profile endpoint (for scanning the QR code without auth)
+app.get("/api/public/sellers/:id", handleGetPublicSellerProfile);
 
 // Client services endpoints
 app.get("/api/my-services", requireAuth, handleGetMyServices);
