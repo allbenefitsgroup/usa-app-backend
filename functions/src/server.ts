@@ -107,7 +107,7 @@ function wrapHandler<T>(handler: (req: ApiRequest<T>) => Promise<any>, requiresA
       }
 
       const request: ApiRequest<T> = {
-        data: req.body.data || req.body,
+        data: { ...req.body.data, ...req.body, ...req.params },
         auth: authContext || undefined,
         rawRequest: req,
       };
