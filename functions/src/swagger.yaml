@@ -1276,6 +1276,98 @@ paths:
         "403":
           description: Sin permisos
 
+  /api/sellers/{id}/qr:
+    get:
+      summary: Generar codigo QR para un vendedor
+      description: |
+        Genera un codigo QR en formato base64 PNG que apunta al perfil publico del vendedor.
+        Cualquier usuario puede acceder (no requiere autenticacion).
+      tags:
+        - Sellers
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: UID del vendedor
+      responses:
+        "200":
+          description: QR generado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  qrCode:
+                    type: string
+                    description: Imagen QR en formato base64 PNG (data URL)
+                  url:
+                    type: string
+                    description: URL publica del perfil del vendedor
+        "403":
+          description: El usuario no es un vendedor
+        "404":
+          description: Vendedor no encontrado
+
+  /api/public/sellers/{id}:
+    get:
+      summary: Obtener perfil publico de un vendedor
+      description: |
+        Devuelve los datos publicos de un vendedor (nombre, cargo, descripcion, etc.).
+        Cualquier usuario puede acceder (no requiere autenticacion).
+      tags:
+        - Sellers
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: UID del vendedor
+      responses:
+        "200":
+          description: Perfil del vendedor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  seller:
+                    type: object
+                    properties:
+                      nombre:
+                        type: string
+                        nullable: true
+                      cargo:
+                        type: string
+                        nullable: true
+                      descripcion:
+                        type: string
+                        nullable: true
+                      ubicacion:
+                        type: string
+                        nullable: true
+                      calificacion:
+                        type: number
+                        nullable: true
+                      especialidades:
+                        type: array
+                        items:
+                          type: string
+                      telefono:
+                        type: string
+                        nullable: true
+                      correo:
+                        type: string
+                        nullable: true
+        "404":
+          description: Vendedor no encontrado
+
   /api/requestProductInfo:
     post:
       summary: Solicitar informacion de producto
