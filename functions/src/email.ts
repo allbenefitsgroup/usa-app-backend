@@ -1,4 +1,4 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import { formatMoney } from "./money";
 
 interface CourseEmailInput {
@@ -22,13 +22,24 @@ interface WelcomeEmailInput {
   role: string;
 }
 
-function canSendEmail(input: CourseEmailInput): boolean {
+function canSendEmail(input: { apiKey: string; supportEmail: string }): boolean {
   if (!input.apiKey || !input.supportEmail) {
     console.warn("Email was skipped because EMAIL_API_KEY or SUPPORT_EMAIL is missing.");
     return false;
   }
-
   return true;
+}
+
+function createTransporter(apiKey: string, supportEmail: string) {
+  return nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    auth: {
+      user: supportEmail,
+      pass: apiKey,
+    },
+  });
 }
 
 function courseLink(appUrl: string, courseId: string): string {
@@ -41,11 +52,11 @@ export async function sendPurchaseConfirmation(input: CourseEmailInput): Promise
     return;
   }
 
-  const resend = new Resend(input.apiKey);
+  const transporter = createTransporter(input.apiKey, input.supportEmail);
   const link = courseLink(input.appUrl, input.courseId);
   const price = formatMoney(input.amount, input.currency);
 
-  await resend.emails.send({
+  await transporter.sendMail({
     from: input.supportEmail,
     to: input.to,
     subject: `Your course access is ready: ${input.courseTitle}`,
@@ -71,9 +82,9 @@ export async function sendPaymentFailedEmail(input: CourseEmailInput): Promise<v
     return;
   }
 
-  const resend = new Resend(input.apiKey);
+  const transporter = createTransporter(input.apiKey, input.supportEmail);
 
-  await resend.emails.send({
+  await transporter.sendMail({
     from: input.supportEmail,
     to: input.to,
     subject: `Payment failed: ${input.courseTitle}`,
@@ -99,9 +110,9 @@ export async function sendRefundEmail(input: CourseEmailInput): Promise<void> {
     return;
   }
 
-  const resend = new Resend(input.apiKey);
+  const transporter = createTransporter(input.apiKey, input.supportEmail);
 
-  await resend.emails.send({
+  await transporter.sendMail({
     from: input.supportEmail,
     to: input.to,
     subject: `Refund processed: ${input.courseTitle}`,
@@ -136,7 +147,7 @@ export async function sendAdminNotificationEmail(input: AdminNotificationInput):
     return;
   }
 
-  const resend = new Resend(input.apiKey);
+  const transporter = createTransporter(input.apiKey, input.supportEmail);
 
   const roleLabels: Record<string, string> = {
     client: "Cliente",
@@ -146,7 +157,7 @@ export async function sendAdminNotificationEmail(input: AdminNotificationInput):
   };
   const roleLabel = roleLabels[input.role] || "Usuario";
 
-  await resend.emails.send({
+  await transporter.sendMail({
     from: input.supportEmail,
     to: input.to,
     subject: `Nuevo registro: ${input.userName} (${roleLabel})`,
@@ -193,7 +204,7 @@ export async function sendWelcomeEmail(input: WelcomeEmailInput): Promise<void> 
     return;
   }
 
-  const resend = new Resend(input.apiKey);
+  const transporter = createTransporter(input.apiKey, input.supportEmail);
 
   const roleLabels: Record<string, string> = {
     client: "Cliente",
@@ -204,7 +215,7 @@ export async function sendWelcomeEmail(input: WelcomeEmailInput): Promise<void> 
   const roleLabel = roleLabels[input.role] || "Usuario";
   const loginUrl = input.appUrl ? `${input.appUrl.replace(/\/$/, "")}/login` : "https://your-app.example.com/login";
 
-  await resend.emails.send({
+  await transporter.sendMail({
     from: input.supportEmail,
     to: input.to,
     subject: `Bienvenido${input.userName ? `, ${input.userName}` : ""} - Tu cuenta de ${roleLabel} está lista`,
