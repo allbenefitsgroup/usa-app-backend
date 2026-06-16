@@ -4,7 +4,8 @@ import { promisify } from "util";
 import jwt from "jsonwebtoken";
 import { GetCommand, PutCommand, ScanCommand, DeleteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { ddb, USERS_TABLE, REVOKED_TOKENS_TABLE, SERVICES_TABLE } from "./dynamodb";
-import { jwtSecret } from "./config";
+import { jwtSecret, emailApiKey, supportEmail, appUrl, adminEmail } from "./config";
+import { sendWelcomeEmail, sendAdminNotificationEmail } from "./email";
 
 export type AuthContext = {
   uid: string;
@@ -194,6 +195,28 @@ export async function handleRegister(req: Request, res: Response) {
       })
     );
 
+    sendWelcomeEmail({
+      apiKey: emailApiKey.value(),
+      supportEmail: supportEmail.value(),
+      appUrl: appUrl.value(),
+      to: email.toLowerCase().trim(),
+      userName: name.trim(),
+      role: roleInput,
+    }).catch((err) => console.error("Welcome email error:", err));
+
+    const adminEmailValue = adminEmail.value();
+    if (adminEmailValue) {
+      sendAdminNotificationEmail({
+        apiKey: emailApiKey.value(),
+        supportEmail: supportEmail.value(),
+        to: adminEmailValue,
+        userName: name.trim(),
+        email: email.toLowerCase().trim(),
+        role: roleInput,
+        phone: phone ? String(phone).trim() : null,
+      }).catch((err) => console.error("Admin notification email error:", err));
+    }
+
     const token = signToken({ uid, email: email.toLowerCase().trim(), role: roleInput });
 
     res.status(201).json({
@@ -279,6 +302,15 @@ export async function handleCreateUser(req: Request, res: Response) {
         },
       })
     );
+
+    sendWelcomeEmail({
+      apiKey: emailApiKey.value(),
+      supportEmail: supportEmail.value(),
+      appUrl: appUrl.value(),
+      to: email.toLowerCase().trim(),
+      userName: name.trim(),
+      role: roleInput,
+    }).catch((err) => console.error("Welcome email error:", err));
 
     res.status(201).json({
       ok: true,

@@ -12,6 +12,7 @@ export const emailApiKey = env("EMAIL_API_KEY");
 
 export const appUrl = env("APP_URL");
 export const supportEmail = env("SUPPORT_EMAIL");
+export const adminEmail = env("ADMIN_EMAIL");
 
 // Auth - usando variable de entorno normal para evitar depender de Secret Manager inicialmente
 export const jwtSecret = env("JWT_SECRET", "cambiar-esto-en-produccion-por-un-secreto-largo-y-seguro");
