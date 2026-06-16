@@ -1,4 +1,4 @@
-import sgMail from "@sendgrid/mail";
+import { Resend } from "resend";
 import { formatMoney } from "./money";
 
 interface CourseEmailInput {
@@ -41,14 +41,13 @@ export async function sendPurchaseConfirmation(input: CourseEmailInput): Promise
     return;
   }
 
-  sgMail.setApiKey(input.apiKey);
-
+  const resend = new Resend(input.apiKey);
   const link = courseLink(input.appUrl, input.courseId);
   const price = formatMoney(input.amount, input.currency);
 
-  await sgMail.send({
-    to: input.to,
+  await resend.emails.send({
     from: input.supportEmail,
+    to: input.to,
     subject: `Your course access is ready: ${input.courseTitle}`,
     text: [
       `Hi ${input.userName || "there"},`,
@@ -72,11 +71,11 @@ export async function sendPaymentFailedEmail(input: CourseEmailInput): Promise<v
     return;
   }
 
-  sgMail.setApiKey(input.apiKey);
+  const resend = new Resend(input.apiKey);
 
-  await sgMail.send({
-    to: input.to,
+  await resend.emails.send({
     from: input.supportEmail,
+    to: input.to,
     subject: `Payment failed: ${input.courseTitle}`,
     text: [
       `Hi ${input.userName || "there"},`,
@@ -100,11 +99,11 @@ export async function sendRefundEmail(input: CourseEmailInput): Promise<void> {
     return;
   }
 
-  sgMail.setApiKey(input.apiKey);
+  const resend = new Resend(input.apiKey);
 
-  await sgMail.send({
-    to: input.to,
+  await resend.emails.send({
     from: input.supportEmail,
+    to: input.to,
     subject: `Refund processed: ${input.courseTitle}`,
     text: [
       `Hi ${input.userName || "there"},`,
@@ -137,7 +136,7 @@ export async function sendAdminNotificationEmail(input: AdminNotificationInput):
     return;
   }
 
-  sgMail.setApiKey(input.apiKey);
+  const resend = new Resend(input.apiKey);
 
   const roleLabels: Record<string, string> = {
     client: "Cliente",
@@ -147,9 +146,9 @@ export async function sendAdminNotificationEmail(input: AdminNotificationInput):
   };
   const roleLabel = roleLabels[input.role] || "Usuario";
 
-  await sgMail.send({
-    to: input.to,
+  await resend.emails.send({
     from: input.supportEmail,
+    to: input.to,
     subject: `Nuevo registro: ${input.userName} (${roleLabel})`,
     text: [
       `Nuevo usuario registrado en la plataforma.`,
@@ -194,7 +193,7 @@ export async function sendWelcomeEmail(input: WelcomeEmailInput): Promise<void> 
     return;
   }
 
-  sgMail.setApiKey(input.apiKey);
+  const resend = new Resend(input.apiKey);
 
   const roleLabels: Record<string, string> = {
     client: "Cliente",
@@ -205,9 +204,9 @@ export async function sendWelcomeEmail(input: WelcomeEmailInput): Promise<void> 
   const roleLabel = roleLabels[input.role] || "Usuario";
   const loginUrl = input.appUrl ? `${input.appUrl.replace(/\/$/, "")}/login` : "https://your-app.example.com/login";
 
-  await sgMail.send({
-    to: input.to,
+  await resend.emails.send({
     from: input.supportEmail,
+    to: input.to,
     subject: `Bienvenido${input.userName ? `, ${input.userName}` : ""} - Tu cuenta de ${roleLabel} está lista`,
     text: [
       `Hola ${input.userName || "nuevo usuario"},`,
