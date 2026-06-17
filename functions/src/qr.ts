@@ -34,6 +34,7 @@ export async function handleGetPublicSellerProfile(req: Request, res: Response) 
       descripcion: user.description || null,
       ubicacion: user.location || null,
       calificacion: user.rating || null,
+      tiempo_respuesta: user.responseTime || null,
       especialidades: user.specialties || [],
       telefono: user.phone || null,
       correo: user.email || null,

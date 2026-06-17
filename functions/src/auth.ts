@@ -472,6 +472,7 @@ export async function handleGetUser(req: Request, res: Response) {
       description: user.description || null,
       location: user.location || null,
       rating: user.rating || null,
+      responseTime: user.responseTime || null,
       specialties: user.specialties || [],
     };
 
@@ -585,6 +586,7 @@ export async function handleGetUserPublic(req: Request, res: Response) {
       description: user.description || null,
       location: user.location || null,
       rating: user.rating || null,
+      responseTime: user.responseTime || null,
       specialties: user.specialties || [],
     };
 
@@ -940,13 +942,25 @@ export async function handleUpdateUserProfile(req: Request, res: Response) {
     // Rating: number
     if (body.rating !== undefined) {
       const rating = typeof body.rating === "string" ? parseFloat(body.rating) : body.rating;
-      if (typeof rating !== "number" || isNaN(rating) || rating < 0 || rating > 5) {
-        res.status(400).json({ error: { message: "rating must be a number between 0 and 5.", status: "INVALID_ARGUMENT" } });
+      if (typeof rating !== "number" || isNaN(rating) || rating < 0 || rating > 10) {
+        res.status(400).json({ error: { message: "rating must be a number between 0 and 10.", status: "INVALID_ARGUMENT" } });
         return;
       }
       updateExpressions.push("#rating = :rating");
       expressionAttributeNames["#rating"] = "rating";
       expressionAttributeValues[":rating"] = rating;
+    }
+
+    // ResponseTime: number (minutes)
+    if (body.responseTime !== undefined) {
+      const responseTime = typeof body.responseTime === "string" ? parseInt(body.responseTime, 10) : body.responseTime;
+      if (typeof responseTime !== "number" || isNaN(responseTime) || responseTime < 0) {
+        res.status(400).json({ error: { message: "responseTime must be a non-negative number.", status: "INVALID_ARGUMENT" } });
+        return;
+      }
+      updateExpressions.push("#responseTime = :responseTime");
+      expressionAttributeNames["#responseTime"] = "responseTime";
+      expressionAttributeValues[":responseTime"] = responseTime;
     }
 
     if (updateExpressions.length === 0) {

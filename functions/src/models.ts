@@ -19,6 +19,7 @@ export interface UserProfile {
   specialties?: string[] | null;
   startDate?: Timestamp | null;
   rating?: number | null;
+  responseTime?: number | null;
   createdAt: Timestamp;
   updatedAt?: Timestamp;
 }
