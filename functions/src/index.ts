@@ -238,8 +238,8 @@ const DEFAULT_RECOMMENDATIONS: Array<{
   id: string;
   title: string;
   type: "general";
-  imageUrl?: string;
-  ctaLink?: string;
+  imageUrl?: string | null;
+  ctaLink?: string | null;
 }> = [
   {
     id: "rec-001",
@@ -396,12 +396,9 @@ export async function handleGetRecommendations() {
           id: r.id,
           title: r.title,
           type: r.type,
-          imageUrl: null,
-          ctaLink: null,
-          active: true,
-          icon: r.icon || null,
-          ctaLabel: r.ctaLabel || null,
+          imageUrl: r.imageUrl || null,
           ctaLink: r.ctaLink || null,
+          active: true,
         }));
 
   const blockIndex = getSixHourBlock(now);
@@ -417,14 +414,10 @@ export async function handleGetRecommendations() {
     recommendations: rotated.map((r) => ({
       id: r.id,
       title: r.title,
-      subtitle: r.subtitle,
       type: r.type,
-      externalUrl: r.externalUrl || null,
       imageUrl: r.imageUrl || null,
-      color: r.color || null,
-      icon: r.icon || null,
-      ctaLabel: r.ctaLabel || null,
       ctaLink: r.ctaLink || null,
+      active: r.active ?? true,
     })),
     activeIndex: 0,
     total: source.length,
