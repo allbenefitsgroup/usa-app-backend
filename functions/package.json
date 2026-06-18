@@ -16,6 +16,7 @@
     "@aws-sdk/lib-dynamodb": "^3.1057.0",
     "@open-wa/wa-automate": "^4.76.0",
     "@sendgrid/mail": "^8.1.4",
+    "nodemailer": "^6.9.8",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

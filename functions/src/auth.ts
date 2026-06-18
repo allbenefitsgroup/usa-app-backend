@@ -2,8 +2,8 @@ import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { promisify } from "util";
 import jwt from "jsonwebtoken";
-import { GetCommand, PutCommand, ScanCommand, DeleteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import { ddb, USERS_TABLE, REVOKED_TOKENS_TABLE, SERVICES_TABLE } from "./dynamodb";
+import { GetCommand, PutCommand, QueryCommand, DeleteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { ddb, USERS_TABLE, EMAIL_INDEX, REVOKED_TOKENS_TABLE, SERVICES_TABLE } from "./dynamodb";
 import { jwtSecret, emailApiKey, supportEmail, appUrl, adminEmail } from "./config";
 import { sendWelcomeEmail, sendAdminNotificationEmail } from "./email";
 
@@ -120,27 +120,17 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
 
 async function findUsersByEmail(email: string): Promise<Record<string, any>[]> {
   const searchEmail = email.toLowerCase().trim();
-  const users: Record<string, any>[] = [];
-  let lastEvaluatedKey: Record<string, any> | undefined = undefined;
 
-  do {
-    const scanResult: any = await ddb.send(
-      new ScanCommand({
-        TableName: USERS_TABLE,
-        FilterExpression: "email = :email",
-        ExpressionAttributeValues: { ":email": searchEmail },
-        ExclusiveStartKey: lastEvaluatedKey,
-      })
-    );
+  const queryResult: any = await ddb.send(
+    new QueryCommand({
+      TableName: USERS_TABLE,
+      IndexName: EMAIL_INDEX,
+      KeyConditionExpression: "email = :email",
+      ExpressionAttributeValues: { ":email": searchEmail },
+    })
+  );
 
-    if (scanResult.Items && scanResult.Items.length > 0) {
-      users.push(...scanResult.Items);
-    }
-
-    lastEvaluatedKey = scanResult.LastEvaluatedKey;
-  } while (lastEvaluatedKey);
-
-  return users;
+  return queryResult.Items || [];
 }
 
 export async function handleRegister(req: Request, res: Response) {
@@ -909,6 +899,10 @@ export async function handleUpdateUserProfile(req: Request, res: Response) {
 
     for (const [key, attrName] of Object.entries(stringFields)) {
       if (body[key] !== undefined) {
+        if (key === "email" && (body[key] === null || body[key] === "")) {
+          res.status(400).json({ error: { message: "email cannot be null or empty.", status: "INVALID_ARGUMENT" } });
+          return;
+        }
         const safeKey = key.replace(/[^a-zA-Z0-9]/g, "");
         updateExpressions.push(`#${safeKey} = :${safeKey}`);
         expressionAttributeNames[`#${safeKey}`] = attrName;

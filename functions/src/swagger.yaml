@@ -296,20 +296,9 @@ paths:
                               type: string
                             title:
                               type: string
-                            subtitle:
-                              type: string
                             type:
                               type: string
                             imageUrl:
-                              type: string
-                              nullable: true
-                            color:
-                              type: string
-                              nullable: true
-                            icon:
-                              type: string
-                              nullable: true
-                            ctaLabel:
                               type: string
                               nullable: true
                             ctaLink:
@@ -733,20 +722,12 @@ paths:
               properties:
                 title:
                   type: string
-                subtitle:
-                  type: string
                 type:
                   type: string
                   enum: [instagram, youtube, general]
                 externalUrl:
                   type: string
                 imageUrl:
-                  type: string
-                color:
-                  type: string
-                icon:
-                  type: string
-                ctaLabel:
                   type: string
                 ctaLink:
                   type: string
