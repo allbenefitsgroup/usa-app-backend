@@ -234,99 +234,6 @@ export async function handleSendWhatsappNotification(request: ApiRequest<SendWha
   }
 }
 
-const DEFAULT_RECOMMENDATIONS: Array<{
-  id: string;
-  title: string;
-  type: "general";
-  imageUrl?: string | null;
-  ctaLink?: string | null;
-}> = [
-  {
-    id: "rec-001",
-    title: "PROTEGÉ TU FUTURO HOY",
-    type: "general",
-    imageUrl: null,
-    ctaLink: "/plans/iul",
-  },
-  {
-    id: "rec-002",
-    title: "TU CASA, TU LEGADO",
-    type: "general",
-    imageUrl: null,
-    ctaLink: "/plans/mortgage-protection",
-  },
-  {
-    id: "rec-003",
-    title: "SONREÍ SIN PREOCUPACIONES",
-    type: "general",
-    imageUrl: null,
-    ctaLink: "/plans/dental",
-  },
-  {
-    id: "rec-004",
-    title: "CUIDÁ TU VISTA, MEJORÁ TU VIDA",
-    type: "general",
-    imageUrl: null,
-    ctaLink: "/plans/vision",
-  },
-  {
-    id: "rec-005",
-    title: "NO DEJES DEUDAS A QUIENES AMÁS",
-    type: "general",
-    imageUrl: null,
-    ctaLink: "/plans/final-expenses",
-  },
-  {
-    id: "rec-006",
-    title: "ACCIDENTES PASAN. PREPARATE.",
-    type: "general",
-    imageUrl: null,
-    ctaLink: "/plans/accident",
-  },
-  {
-    id: "rec-007",
-    title: "AHORRÁ PARA EL RETIRO SIN RIESGOS",
-    type: "general",
-    imageUrl: null,
-    ctaLink: "/plans/iul",
-  },
-  {
-    id: "rec-008",
-    title: "TU FAMILIA MERECE TRANQUILIDAD",
-    type: "general",
-    imageUrl: null,
-    ctaLink: "/plans/mortgage-protection",
-  },
-  {
-    id: "rec-009",
-    title: "LA SALUD BUCAL EMPIEZA HOY",
-    type: "general",
-    imageUrl: null,
-    ctaLink: "/plans/dental",
-  },
-  {
-    id: "rec-010",
-    title: "DETECTÁ A TIEMPO, VIVÍ MEJOR",
-    type: "general",
-    imageUrl: null,
-    ctaLink: "/plans/vision",
-  },
-  {
-    id: "rec-011",
-    title: "UN GESTO DE AMOR PARA SIEMPRE",
-    type: "general",
-    imageUrl: null,
-    ctaLink: "/plans/final-expenses",
-  },
-  {
-    id: "rec-012",
-    title: "PROTECCIÓN REAL PARA EL DÍA A DÍA",
-    type: "general",
-    imageUrl: null,
-    ctaLink: "/plans/accident",
-  },
-];
-
 function getSixHourBlock(date: Date): number {
   const year = date.getUTCFullYear();
   const month = date.getUTCMonth();
@@ -386,23 +293,13 @@ export async function handleGetRecommendations() {
         .sort((a, b) => a.order - b.order);
     }
   } catch (err) {
-    console.warn("Failed to load recommendations from DynamoDB, using defaults.", err);
+    console.warn("Failed to load recommendations from DynamoDB.", err);
   }
 
-  const source =
-    items.length > 0
-      ? items
-      : DEFAULT_RECOMMENDATIONS.map((r) => ({
-          id: r.id,
-          title: r.title,
-          type: r.type,
-          imageUrl: r.imageUrl || null,
-          ctaLink: r.ctaLink || null,
-          active: true,
-        }));
+  const source = items;
 
   const blockIndex = getSixHourBlock(now);
-  const shift = blockIndex % source.length;
+  const shift = source.length > 0 ? blockIndex % source.length : 0;
 
   // Rotate so the current block's recommendation is first, preserving order
   const rotated = [
