@@ -2,8 +2,8 @@ import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { promisify } from "util";
 import jwt from "jsonwebtoken";
-import { GetCommand, PutCommand, QueryCommand, ScanCommand, DeleteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import { ddb, USERS_TABLE, EMAIL_INDEX, REVOKED_TOKENS_TABLE, SERVICES_TABLE } from "./dynamodb";
+import { GetCommand, PutCommand, ScanCommand, DeleteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { ddb, USERS_TABLE, REVOKED_TOKENS_TABLE, SERVICES_TABLE } from "./dynamodb";
 import { jwtSecret, emailApiKey, supportEmail, appUrl, adminEmail } from "./config";
 import { sendWelcomeEmail, sendAdminNotificationEmail } from "./email";
 
@@ -120,17 +120,27 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
 
 async function findUsersByEmail(email: string): Promise<Record<string, any>[]> {
   const searchEmail = email.toLowerCase().trim();
+  const users: Record<string, any>[] = [];
+  let lastEvaluatedKey: Record<string, any> | undefined = undefined;
 
-  const queryResult: any = await ddb.send(
-    new QueryCommand({
-      TableName: USERS_TABLE,
-      IndexName: EMAIL_INDEX,
-      KeyConditionExpression: "email = :email",
-      ExpressionAttributeValues: { ":email": searchEmail },
-    })
-  );
+  do {
+    const scanResult: any = await ddb.send(
+      new ScanCommand({
+        TableName: USERS_TABLE,
+        FilterExpression: "email = :email",
+        ExpressionAttributeValues: { ":email": searchEmail },
+        ExclusiveStartKey: lastEvaluatedKey,
+      })
+    );
 
-  return queryResult.Items || [];
+    if (scanResult.Items && scanResult.Items.length > 0) {
+      users.push(...scanResult.Items);
+    }
+
+    lastEvaluatedKey = scanResult.LastEvaluatedKey;
+  } while (lastEvaluatedKey);
+
+  return users;
 }
 
 export async function handleRegister(req: Request, res: Response) {
