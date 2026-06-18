@@ -237,131 +237,92 @@ export async function handleSendWhatsappNotification(request: ApiRequest<SendWha
 const DEFAULT_RECOMMENDATIONS: Array<{
   id: string;
   title: string;
-  subtitle: string;
   type: "general";
-  color?: string;
-  icon?: string;
-  ctaLabel?: string;
+  imageUrl?: string;
   ctaLink?: string;
 }> = [
   {
     id: "rec-001",
     title: "PROTEGÉ TU FUTURO HOY",
-    subtitle: "El IUL combina protección familiar + acumulación libre de impuestos. Tu dinero crece con el mercado sin riesgo de pérdida.",
     type: "general",
-    color: "#2E8B57",
-    icon: "trending-up",
-    ctaLabel: "Conocer IUL",
+    imageUrl: null,
     ctaLink: "/plans/iul",
   },
   {
     id: "rec-002",
     title: "TU CASA, TU LEGADO",
-    subtitle: "Con Mortgage Protection, tu familia no pierde el hogar si algo te pasa. Cubrimos tu hipoteca en caso de fallecimiento o enfermedad grave.",
     type: "general",
-    color: "#4682B4",
-    icon: "home",
-    ctaLabel: "Proteger mi hipoteca",
+    imageUrl: null,
     ctaLink: "/plans/mortgage-protection",
   },
   {
     id: "rec-003",
     title: "SONREÍ SIN PREOCUPACIONES",
-    subtitle: "El seguro dental cubre limpiezas, revisiones y descuentos en tratamientos. Prevención hoy, ahorro mañana.",
     type: "general",
-    color: "#87CEEB",
-    icon: "tooth",
-    ctaLabel: "Ver plan dental",
+    imageUrl: null,
     ctaLink: "/plans/dental",
   },
   {
     id: "rec-004",
     title: "CUIDÁ TU VISTA, MEJORÁ TU VIDA",
-    subtitle: "Con cobertura de optometría tenés exámenes periódicos y descuentos en lentes. La salud visual es salud total.",
     type: "general",
-    color: "#9370DB",
-    icon: "eye",
-    ctaLabel: "Ver cobertura visual",
+    imageUrl: null,
     ctaLink: "/plans/vision",
   },
   {
     id: "rec-005",
     title: "NO DEJES DEUDAS A QUIENES AMÁS",
-    subtitle: "El seguro funerario cubre gastos inmediatos sin exámenes médicos ni trámites largos. Protegé a tu familia de gastos inesperados.",
     type: "general",
-    color: "#708090",
-    icon: "shield",
-    ctaLabel: "Cotizar seguro funerario",
+    imageUrl: null,
     ctaLink: "/plans/final-expenses",
   },
   {
     id: "rec-006",
     title: "ACCIDENTES PASAN. PREPARATE.",
-    subtitle: "La póliza de accidentes te paga en efectivo por caídas, fracturas y más. Cobertura 24/7 para toda la familia y costos accesibles.",
     type: "general",
-    color: "#FF6347",
-    icon: "alert-triangle",
-    ctaLabel: "Ver póliza de accidentes",
+    imageUrl: null,
     ctaLink: "/plans/accident",
   },
   {
     id: "rec-007",
     title: "AHORRÁ PARA EL RETIRO SIN RIESGOS",
-    subtitle: "El IUL es ideal para jubilación o educación de tus hijos: crecimiento basado en el S&P 500, acceso a tu dinero en vida y sin pérdidas.",
     type: "general",
-    color: "#228B22",
-    icon: "piggy-bank",
-    ctaLabel: "Simular mi IUL",
+    imageUrl: null,
     ctaLink: "/plans/iul",
   },
   {
     id: "rec-008",
     title: "TU FAMILIA MERECE TRANQUILIDAD",
-    subtitle: "Mortgage Protection garantiza que tus seres queridos mantengan la casa. Pagos directos al banco o beneficiarios.",
     type: "general",
-    color: "#4169E1",
-    icon: "heart",
-    ctaLabel: "Proteger a mi familia",
+    imageUrl: null,
     ctaLink: "/plans/mortgage-protection",
   },
   {
     id: "rec-009",
     title: "LA SALUD BUCAL EMPIEZA HOY",
-    subtitle: "Limpiezas incluidas, descuentos en cirugías y ortodoncia para niños. Un plan dental evita problemas mayores y gastos sorpresa.",
     type: "general",
-    color: "#00CED1",
-    icon: "smile",
-    ctaLabel: "Activar plan dental",
+    imageUrl: null,
     ctaLink: "/plans/dental",
   },
   {
     id: "rec-010",
     title: "DETECTÁ A TIEMPO, VIVÍ MEJOR",
-    subtitle: "Exámenes visuales periódicos detectan problemas antes de que empeoren. Con Vision tenés descuentos en gafas y lentes de contacto.",
     type: "general",
-    color: "#6A5ACD",
-    icon: "glasses",
-    ctaLabel: "Ver plan de visión",
+    imageUrl: null,
     ctaLink: "/plans/vision",
   },
   {
     id: "rec-011",
     title: "UN GESTO DE AMOR PARA SIEMPRE",
-    subtitle: "El seguro funerario es económico, accesible y pago rápido a beneficiarios. Dejá paz a tu familia, no deudas.",
     type: "general",
-    color: "#556B2F",
-    icon: "peace",
-    ctaLabel: "Cotizar ahora",
+    imageUrl: null,
     ctaLink: "/plans/final-expenses",
   },
   {
     id: "rec-012",
     title: "PROTECCIÓN REAL PARA EL DÍA A DÍA",
-    subtitle: "Accidentes dentro y fuera de casa. Pagos directos en efectivo para gastos médicos y hospitalarios. Una sola póliza para toda la familia.",
     type: "general",
-    color: "#DC143C",
-    icon: "shield-check",
-    ctaLabel: "Conocer cobertura",
+    imageUrl: null,
     ctaLink: "/plans/accident",
   },
 ];
@@ -385,14 +346,10 @@ export async function handleGetRecommendations() {
   let items: Array<{
     id: string;
     title: string;
-    subtitle: string;
     type: string;
-    externalUrl?: string | null;
     imageUrl?: string | null;
-    color?: string | null;
-    icon?: string | null;
-    ctaLabel?: string | null;
     ctaLink?: string | null;
+    active?: boolean;
   }> = [];
 
   try {
@@ -420,14 +377,10 @@ export async function handleGetRecommendations() {
         .map((data) => ({
           id: String(data.id || ""),
           title: typeof data.title === "string" ? data.title : "",
-          subtitle: typeof data.subtitle === "string" ? data.subtitle : "",
           type: typeof data.type === "string" ? data.type : "general",
-          externalUrl: data.externalUrl || null,
           imageUrl: data.imageUrl || null,
-          color: data.color || null,
-          icon: data.icon || null,
-          ctaLabel: data.ctaLabel || null,
           ctaLink: data.ctaLink || null,
+          active: data.active ?? true,
           order: typeof data.order === "number" ? data.order : 0,
         }))
         .sort((a, b) => a.order - b.order);
@@ -442,11 +395,10 @@ export async function handleGetRecommendations() {
       : DEFAULT_RECOMMENDATIONS.map((r) => ({
           id: r.id,
           title: r.title,
-          subtitle: r.subtitle,
           type: r.type,
-          externalUrl: null,
           imageUrl: null,
-          color: r.color || null,
+          ctaLink: null,
+          active: true,
           icon: r.icon || null,
           ctaLabel: r.ctaLabel || null,
           ctaLink: r.ctaLink || null,
@@ -521,13 +473,8 @@ export async function handleListRecommendations() {
 
 type CreateRecommendationInput = {
   title?: string;
-  subtitle?: string;
   type?: string;
-  externalUrl?: string | null;
   imageUrl?: string | null;
-  color?: string | null;
-  icon?: string | null;
-  ctaLabel?: string | null;
   ctaLink?: string | null;
   active?: boolean;
 };
@@ -535,13 +482,9 @@ type CreateRecommendationInput = {
 export async function handleCreateRecommendation(request: ApiRequest<CreateRecommendationInput>) {
   const data = request.data || {};
   const title = typeof data.title === "string" ? data.title.trim() : "";
-  const subtitle = typeof data.subtitle === "string" ? data.subtitle.trim() : "";
 
   if (!title) {
     throw new ApiError("invalid-argument", "title is required.");
-  }
-  if (!subtitle) {
-    throw new ApiError("invalid-argument", "subtitle is required.");
   }
 
   const type = typeof data.type === "string" ? data.type.trim() : "general";
@@ -579,13 +522,8 @@ export async function handleCreateRecommendation(request: ApiRequest<CreateRecom
       Item: {
         id,
         title,
-        subtitle,
         type,
-        externalUrl: data.externalUrl || null,
         imageUrl: data.imageUrl || null,
-        color: data.color || null,
-        icon: data.icon || null,
-        ctaLabel: data.ctaLabel || null,
         ctaLink: data.ctaLink || null,
         active: typeof data.active === "boolean" ? data.active : true,
         order: nextOrder,
@@ -601,13 +539,8 @@ export async function handleCreateRecommendation(request: ApiRequest<CreateRecom
 type UpdateRecommendationInput = {
   id?: string;
   title?: string;
-  subtitle?: string;
   type?: string;
-  externalUrl?: string | null;
   imageUrl?: string | null;
-  color?: string | null;
-  icon?: string | null;
-  ctaLabel?: string | null;
   ctaLink?: string | null;
   active?: boolean;
 };
@@ -636,11 +569,6 @@ export async function handleUpdateRecommendation(request: ApiRequest<UpdateRecom
     expressionAttributeNames["#t"] = "title";
     expressionAttributeValues[":t"] = data.title.trim();
   }
-  if (typeof data.subtitle === "string") {
-    updateExpressions.push("#s = :s");
-    expressionAttributeNames["#s"] = "subtitle";
-    expressionAttributeValues[":s"] = data.subtitle.trim();
-  }
   if (typeof data.type === "string") {
     const validTypes = ["instagram", "youtube", "general"];
     if (!validTypes.includes(data.type)) {
@@ -650,30 +578,10 @@ export async function handleUpdateRecommendation(request: ApiRequest<UpdateRecom
     expressionAttributeNames["#ty"] = "type";
     expressionAttributeValues[":ty"] = data.type.trim();
   }
-  if (data.externalUrl !== undefined) {
-    updateExpressions.push("#eu = :eu");
-    expressionAttributeNames["#eu"] = "externalUrl";
-    expressionAttributeValues[":eu"] = data.externalUrl;
-  }
   if (data.imageUrl !== undefined) {
     updateExpressions.push("#iu = :iu");
     expressionAttributeNames["#iu"] = "imageUrl";
     expressionAttributeValues[":iu"] = data.imageUrl;
-  }
-  if (data.color !== undefined) {
-    updateExpressions.push("#c = :c");
-    expressionAttributeNames["#c"] = "color";
-    expressionAttributeValues[":c"] = data.color;
-  }
-  if (data.icon !== undefined) {
-    updateExpressions.push("#i = :i");
-    expressionAttributeNames["#i"] = "icon";
-    expressionAttributeValues[":i"] = data.icon;
-  }
-  if (data.ctaLabel !== undefined) {
-    updateExpressions.push("#cl = :cl");
-    expressionAttributeNames["#cl"] = "ctaLabel";
-    expressionAttributeValues[":cl"] = data.ctaLabel;
   }
   if (data.ctaLink !== undefined) {
     updateExpressions.push("#clink = :clink");
