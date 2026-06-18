@@ -150,6 +150,7 @@ export interface ClientService {
   serviceImages?: string[] | null;
   serviceDocuments?: string[] | null;
   monthpay?: number | null;
+  companyName?: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

@@ -58,6 +58,7 @@ export async function handleGetMyServices(req: Request, res: Response) {
         coverageAmount: s.coverageAmount || null,
         premiumAmount: s.premiumAmount || null,
         monthpay: s.monthpay || null,
+        companyName: s.companyName || null,
         currency: s.currency || null,
         notes: s.notes || null,
         beneficiaryName: s.beneficiaryName || null,
@@ -188,6 +189,7 @@ export async function handleCreateService(req: Request, res: Response) {
       serviceImages: serviceImages.length > 0 ? serviceImages : null,
       serviceDocuments: serviceDocuments.length > 0 ? serviceDocuments : null,
       monthpay: typeof body.monthpay === "number" ? body.monthpay : null,
+      companyName: body.companyName ? body.companyName.trim() : null,
       createdAt: now,
       updatedAt: now,
     };
@@ -316,6 +318,7 @@ export async function handleUpdateService(req: Request, res: Response) {
       beneficiaryName: "beneficiaryName",
       beneficiaryPhone: "beneficiaryPhone",
       monthpay: "monthpay",
+      companyName: "companyName",
     };
 
     // Alias mappings
