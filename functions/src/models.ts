@@ -147,6 +147,9 @@ export interface ClientService {
   beneficiaryName?: string | null;
   beneficiaryPhone?: string | null;
   catalogItemId?: string | null;
+  serviceImages?: string[] | null;
+  serviceDocuments?: string[] | null;
+  monthpay?: number | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

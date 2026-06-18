@@ -3,6 +3,7 @@ import { ddb, SERVICES_TABLE } from "./dynamodb";
 import { GetCommand, PutCommand, ScanCommand, UpdateCommand, DeleteCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { generateUid } from "./auth";
 import { ClientService } from "./models";
+import { uploadToS3 } from "./s3Upload";
 
 export async function handleGetMyServices(req: Request, res: Response) {
   try {
@@ -56,10 +57,13 @@ export async function handleGetMyServices(req: Request, res: Response) {
         status: s.status || "active",
         coverageAmount: s.coverageAmount || null,
         premiumAmount: s.premiumAmount || null,
+        monthpay: s.monthpay || null,
         currency: s.currency || null,
         notes: s.notes || null,
         beneficiaryName: s.beneficiaryName || null,
         beneficiaryPhone: s.beneficiaryPhone || null,
+        serviceImages: s.serviceImages || [],
+        serviceDocuments: s.serviceDocuments || [],
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
       })),
@@ -78,9 +82,9 @@ export async function handleCreateService(req: Request, res: Response) {
       return;
     }
 
-    const allowedRoles = ["seller", "admin"];
+    const allowedRoles = ["seller", "admin", "customer", "client"];
     if (!allowedRoles.includes(authContext.role)) {
-      res.status(403).json({ error: { message: "Forbidden: admin access required.", status: "PERMISSION_DENIED" } });
+      res.status(403).json({ error: { message: "Forbidden: access denied.", status: "PERMISSION_DENIED" } });
       return;
     }
 
@@ -97,6 +101,55 @@ export async function handleCreateService(req: Request, res: Response) {
     if (!body.contractDate || typeof body.contractDate !== "string") {
       res.status(400).json({ error: { message: "contractDate is required.", status: "INVALID_ARGUMENT" } });
       return;
+    }
+
+    if (body.monthpay !== undefined && body.monthpay !== null) {
+      if (typeof body.monthpay !== "number" || isNaN(body.monthpay) || body.monthpay < 0) {
+        res.status(400).json({ error: { message: "monthpay must be a non-negative number.", status: "INVALID_ARGUMENT" } });
+        return;
+      }
+    }
+
+    let serviceImages: string[] = [];
+    if (body.serviceImages !== undefined) {
+      if (typeof body.serviceImages === "string") {
+        try { serviceImages = JSON.parse(body.serviceImages); } catch { serviceImages = [body.serviceImages]; }
+      } else if (Array.isArray(body.serviceImages)) {
+        serviceImages = body.serviceImages.map((s: any) => String(s).trim()).filter(Boolean);
+      }
+      if (!Array.isArray(serviceImages)) {
+        res.status(400).json({ error: { message: "serviceImages must be an array.", status: "INVALID_ARGUMENT" } });
+        return;
+      }
+    }
+
+    let serviceDocuments: string[] = [];
+    if (body.serviceDocuments !== undefined) {
+      if (typeof body.serviceDocuments === "string") {
+        try { serviceDocuments = JSON.parse(body.serviceDocuments); } catch { serviceDocuments = [body.serviceDocuments]; }
+      } else if (Array.isArray(body.serviceDocuments)) {
+        serviceDocuments = body.serviceDocuments.map((s: any) => String(s).trim()).filter(Boolean);
+      }
+      if (!Array.isArray(serviceDocuments)) {
+        res.status(400).json({ error: { message: "serviceDocuments must be an array.", status: "INVALID_ARGUMENT" } });
+        return;
+      }
+    }
+
+    const files = req.files as Express.Multer.File[] | undefined;
+    if (files && files.length > 0) {
+      const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "svg"];
+      for (const file of files) {
+        const ext = file.originalname.split(".").pop()?.toLowerCase() || "";
+        const isImage = imageExtensions.includes(ext) || file.mimetype.startsWith("image/");
+        const prefix = isImage ? "services/images/" : "services/documents/";
+        const url = await uploadToS3(file.buffer, file.originalname, file.mimetype, prefix);
+        if (isImage) {
+          serviceImages.push(url);
+        } else {
+          serviceDocuments.push(url);
+        }
+      }
     }
 
     const validStatuses = ["active", "expired", "cancelled", "pending"];
@@ -132,6 +185,9 @@ export async function handleCreateService(req: Request, res: Response) {
       notes: body.notes || body.details || null,
       beneficiaryName: body.beneficiaryName ? body.beneficiaryName.trim() : null,
       beneficiaryPhone: body.beneficiaryPhone ? body.beneficiaryPhone.trim() : null,
+      serviceImages: serviceImages.length > 0 ? serviceImages : null,
+      serviceDocuments: serviceDocuments.length > 0 ? serviceDocuments : null,
+      monthpay: typeof body.monthpay === "number" ? body.monthpay : null,
       createdAt: now,
       updatedAt: now,
     };
@@ -207,9 +263,9 @@ export async function handleUpdateService(req: Request, res: Response) {
       return;
     }
 
-    const allowedRoles = ["seller", "admin"];
+    const allowedRoles = ["seller", "admin", "customer", "client"];
     if (!allowedRoles.includes(authContext.role)) {
-      res.status(403).json({ error: { message: "Forbidden: admin access required.", status: "PERMISSION_DENIED" } });
+      res.status(403).json({ error: { message: "Forbidden: access denied.", status: "PERMISSION_DENIED" } });
       return;
     }
 
@@ -259,6 +315,7 @@ export async function handleUpdateService(req: Request, res: Response) {
       notes: "notes",
       beneficiaryName: "beneficiaryName",
       beneficiaryPhone: "beneficiaryPhone",
+      monthpay: "monthpay",
     };
 
     // Alias mappings
@@ -286,6 +343,77 @@ export async function handleUpdateService(req: Request, res: Response) {
           value = statusMap[value] || value;
         }
         expressionAttributeValues[`:${safeKey}`] = value;
+      }
+    }
+
+    if (body.monthpay !== undefined) {
+      const monthpay = typeof body.monthpay === "string" ? parseFloat(body.monthpay) : body.monthpay;
+      if (typeof monthpay !== "number" || isNaN(monthpay) || monthpay < 0) {
+        res.status(400).json({ error: { message: "monthpay must be a non-negative number.", status: "INVALID_ARGUMENT" } });
+        return;
+      }
+      updateExpressions.push("#monthpay = :monthpay");
+      expressionAttributeNames["#monthpay"] = "monthpay";
+      expressionAttributeValues[":monthpay"] = monthpay;
+    }
+
+    let serviceImages: string[] | undefined;
+    if (body.serviceImages !== undefined) {
+      if (typeof body.serviceImages === "string") {
+        try { serviceImages = JSON.parse(body.serviceImages); } catch { serviceImages = [body.serviceImages]; }
+      } else if (Array.isArray(body.serviceImages)) {
+        serviceImages = body.serviceImages.map((s: any) => String(s).trim()).filter(Boolean);
+      }
+      if (!Array.isArray(serviceImages)) {
+        res.status(400).json({ error: { message: "serviceImages must be an array.", status: "INVALID_ARGUMENT" } });
+        return;
+      }
+      updateExpressions.push("#serviceImages = :serviceImages");
+      expressionAttributeNames["#serviceImages"] = "serviceImages";
+      expressionAttributeValues[":serviceImages"] = serviceImages;
+    }
+
+    let serviceDocuments: string[] | undefined;
+    if (body.serviceDocuments !== undefined) {
+      if (typeof body.serviceDocuments === "string") {
+        try { serviceDocuments = JSON.parse(body.serviceDocuments); } catch { serviceDocuments = [body.serviceDocuments]; }
+      } else if (Array.isArray(body.serviceDocuments)) {
+        serviceDocuments = body.serviceDocuments.map((s: any) => String(s).trim()).filter(Boolean);
+      }
+      if (!Array.isArray(serviceDocuments)) {
+        res.status(400).json({ error: { message: "serviceDocuments must be an array.", status: "INVALID_ARGUMENT" } });
+        return;
+      }
+      updateExpressions.push("#serviceDocuments = :serviceDocuments");
+      expressionAttributeNames["#serviceDocuments"] = "serviceDocuments";
+      expressionAttributeValues[":serviceDocuments"] = serviceDocuments;
+    }
+
+    const files = req.files as Express.Multer.File[] | undefined;
+    if (files && files.length > 0) {
+      const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "svg"];
+      let newImages: string[] = serviceImages || [];
+      let newDocs: string[] = serviceDocuments || [];
+      for (const file of files) {
+        const ext = file.originalname.split(".").pop()?.toLowerCase() || "";
+        const isImage = imageExtensions.includes(ext) || file.mimetype.startsWith("image/");
+        const prefix = isImage ? "services/images/" : "services/documents/";
+        const url = await uploadToS3(file.buffer, file.originalname, file.mimetype, prefix);
+        if (isImage) {
+          newImages.push(url);
+        } else {
+          newDocs.push(url);
+        }
+      }
+      if (newImages.length > 0) {
+        updateExpressions.push("#serviceImages = :serviceImages");
+        expressionAttributeNames["#serviceImages"] = "serviceImages";
+        expressionAttributeValues[":serviceImages"] = newImages;
+      }
+      if (newDocs.length > 0) {
+        updateExpressions.push("#serviceDocuments = :serviceDocuments");
+        expressionAttributeNames["#serviceDocuments"] = "serviceDocuments";
+        expressionAttributeValues[":serviceDocuments"] = newDocs;
       }
     }
 
