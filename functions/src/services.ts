@@ -105,7 +105,8 @@ export async function handleCreateService(req: Request, res: Response) {
     }
 
     if (body.monthpay !== undefined && body.monthpay !== null) {
-      if (typeof body.monthpay !== "number" || isNaN(body.monthpay) || body.monthpay < 0) {
+      const monthpay = typeof body.monthpay === "string" ? parseFloat(body.monthpay) : body.monthpay;
+      if (typeof monthpay !== "number" || isNaN(monthpay) || monthpay < 0) {
         res.status(400).json({ error: { message: "monthpay must be a non-negative number.", status: "INVALID_ARGUMENT" } });
         return;
       }
@@ -180,15 +181,15 @@ export async function handleCreateService(req: Request, res: Response) {
       contractDate: body.contractDate,
       expiryDate: body.expiryDate || body.expirationDate || null,
       status,
-      coverageAmount: typeof body.coverageAmount === "number" ? body.coverageAmount : null,
-      premiumAmount: typeof body.premiumAmount === "number" ? body.premiumAmount : null,
+      coverageAmount: body.coverageAmount !== undefined && body.coverageAmount !== "" ? (typeof body.coverageAmount === "number" ? body.coverageAmount : parseFloat(body.coverageAmount)) : null,
+      premiumAmount: body.premiumAmount !== undefined && body.premiumAmount !== "" ? (typeof body.premiumAmount === "number" ? body.premiumAmount : parseFloat(body.premiumAmount)) : null,
       currency: body.currency ? body.currency.trim().toUpperCase() : null,
       notes: body.notes || body.details || null,
       beneficiaryName: body.beneficiaryName ? body.beneficiaryName.trim() : null,
       beneficiaryPhone: body.beneficiaryPhone ? body.beneficiaryPhone.trim() : null,
       serviceImages: serviceImages.length > 0 ? serviceImages : null,
       serviceDocuments: serviceDocuments.length > 0 ? serviceDocuments : null,
-      monthpay: typeof body.monthpay === "number" ? body.monthpay : null,
+      monthpay: body.monthpay !== undefined && body.monthpay !== null && body.monthpay !== "" ? (typeof body.monthpay === "number" ? body.monthpay : parseFloat(body.monthpay)) : null,
       companyName: body.companyName ? body.companyName.trim() : null,
       createdAt: now,
       updatedAt: now,
