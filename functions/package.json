@@ -16,16 +16,13 @@
     "@aws-sdk/lib-dynamodb": "^3.1057.0",
     "@open-wa/wa-automate": "^4.76.0",
     "@sendgrid/mail": "^8.1.4",
-<<<<<<< HEAD
-=======
-    "nodemailer": "^6.9.8",
->>>>>>> bdba6c29cc38841ddea61aa5f1c82104756f6077
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^4.22.2",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
+    "nodemailer": "^6.10.1",
     "qrcode": "^1.5.4",
     "resend": "^4.8.0",
     "stripe": "^17.5.0",
@@ -34,11 +31,11 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
-    "@types/nodemailer": "^6.4.17",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.1.0",
+    "@types/nodemailer": "^6.4.17",
     "@types/qrcode": "^1.5.6",
     "@types/swagger-ui-express": "^4.1.8",
     "@types/yamljs": "^0.2.34",
