@@ -449,13 +449,9 @@ export async function handleListRecommendations() {
     recommendations: dbItems.map((data) => ({
       id: String(data.id || ""),
       title: data.title || "",
-      subtitle: data.subtitle || "",
       type: data.type || "general",
       externalUrl: data.externalUrl || null,
       imageUrl: data.imageUrl || null,
-      color: data.color || null,
-      icon: data.icon || null,
-      ctaLabel: data.ctaLabel || null,
       ctaLink: data.ctaLink || null,
       active: !!data.active,
       order: typeof data.order === "number" ? data.order : 0,

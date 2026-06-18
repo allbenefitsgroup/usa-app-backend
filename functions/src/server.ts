@@ -240,13 +240,9 @@ app.post("/api/admin/recommendations", upload.single("image"), async (req: Reque
     const request: ApiRequest<any> = {
       data: {
         title: body.title,
-        subtitle: body.subtitle,
         type: body.type,
         externalUrl: body.externalUrl,
         imageUrl: imageUrl || body.imageUrl || null,
-        color: body.color,
-        icon: body.icon,
-        ctaLabel: body.ctaLabel,
         ctaLink: body.ctaLink,
         active: body.active === "true" || body.active === true ? true : false,
       },
@@ -274,13 +270,9 @@ app.put("/api/admin/recommendations/:id", requireAuth, requireAdmin, upload.sing
       data: {
         id: req.params.id,
         title: body.title,
-        subtitle: body.subtitle,
         type: body.type,
         externalUrl: body.externalUrl,
         imageUrl: imageUrl || body.imageUrl || undefined,
-        color: body.color,
-        icon: body.icon,
-        ctaLabel: body.ctaLabel,
         ctaLink: body.ctaLink,
         active: body.active === "true" || body.active === true ? true : body.active === "false" || body.active === false ? false : undefined,
       },
