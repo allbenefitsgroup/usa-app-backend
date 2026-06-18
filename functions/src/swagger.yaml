@@ -10,7 +10,7 @@ info:
     name: USA All Benefits Group
 
 servers:
-  - url: http://ec2-18-226-62-129.us-east-2.compute.amazonaws.com:3000
+  - url: http://ec2-3-15-210-184.us-east-2.compute.amazonaws.com:3000
     description: Servidor AWS EC2 (produccion)
   - url: http://localhost:3000
     description: Servidor local (Express)
