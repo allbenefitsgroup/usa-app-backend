@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import { promisify } from "util";
 import jwt from "jsonwebtoken";
-import { GetCommand, PutCommand, QueryCommand, DeleteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, PutCommand, QueryCommand, ScanCommand, DeleteCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { ddb, USERS_TABLE, EMAIL_INDEX, REVOKED_TOKENS_TABLE, SERVICES_TABLE } from "./dynamodb";
 import { jwtSecret, emailApiKey, supportEmail, appUrl, adminEmail } from "./config";
 import { sendWelcomeEmail, sendAdminNotificationEmail } from "./email";
