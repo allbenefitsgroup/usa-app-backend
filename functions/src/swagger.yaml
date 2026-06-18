@@ -663,6 +663,12 @@ paths:
                         premiumAmount:
                           type: number
                           nullable: true
+                        monthpay:
+                          type: number
+                          nullable: true
+                        companyName:
+                          type: string
+                          nullable: true
                         currency:
                           type: string
                           nullable: true
@@ -675,6 +681,14 @@ paths:
                         beneficiaryPhone:
                           type: string
                           nullable: true
+                        serviceImages:
+                          type: array
+                          items:
+                            type: string
+                        serviceDocuments:
+                          type: array
+                          items:
+                            type: string
                         createdAt:
                           type: string
                         updatedAt:
@@ -1003,6 +1017,12 @@ paths:
                         premiumAmount:
                           type: number
                           nullable: true
+                        monthpay:
+                          type: number
+                          nullable: true
+                        companyName:
+                          type: string
+                          nullable: true
                         currency:
                           type: string
                           nullable: true
@@ -1015,6 +1035,14 @@ paths:
                         beneficiaryPhone:
                           type: string
                           nullable: true
+                        serviceImages:
+                          type: array
+                          items:
+                            type: string
+                        serviceDocuments:
+                          type: array
+                          items:
+                            type: string
                         createdAt:
                           type: string
                         updatedAt:
@@ -1042,6 +1070,7 @@ paths:
       description: |
         Asigna un servicio individual a un cliente con datos completamente personalizados
         (numero de poliza, fechas, precio, beneficiarios, etc.).
+        Soporta envio de archivos (imagenes y documentos PDF) via multipart/form-data.
       tags:
         - Client Services
       security:
@@ -1049,7 +1078,7 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
               type: object
               required:
@@ -1099,6 +1128,16 @@ paths:
                   type: number
                   nullable: true
                   example: 25000
+                monthpay:
+                  type: number
+                  nullable: true
+                  description: Pago mensual del servicio
+                  example: 150.00
+                companyName:
+                  type: string
+                  nullable: true
+                  description: Nombre de la empresa aseguradora
+                  example: "USA Insurance"
                 currency:
                   type: string
                   nullable: true
@@ -1111,6 +1150,26 @@ paths:
                   type: string
                   nullable: true
                   example: "Maria Garcia"
+                beneficiaryPhone:
+                  type: string
+                  nullable: true
+                  example: "+1234567890"
+                serviceImages:
+                  type: string
+                  nullable: true
+                  description: Array JSON de URLs de imagenes (alternativa a enviar archivos)
+                  example: "[\"https://...\",\"https://...\"]"
+                serviceDocuments:
+                  type: string
+                  nullable: true
+                  description: Array JSON de URLs de PDFs (alternativa a enviar archivos)
+                  example: "[\"https://...pdf\"]"
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Archivos (imagenes o PDFs) - hasta 10 archivos
                 beneficiaryPhone:
                   type: string
                   nullable: true
@@ -1132,7 +1191,7 @@ paths:
   /api/admin/services/{id}:
     put:
       summary: Actualizar servicio de cliente (admin)
-      description: Edita cualquier campo de un servicio ya asignado.
+      description: Edita cualquier campo de un servicio ya asignado. Soporta archivos via multipart/form-data.
       tags:
         - Client Services
       security:
@@ -1145,9 +1204,69 @@ paths:
             type: string
       requestBody:
         content:
-          application/json:
+          multipart/form-data:
             schema:
               type: object
+              properties:
+                userId:
+                  type: string
+                userEmail:
+                  type: string
+                  format: email
+                  nullable: true
+                serviceName:
+                  type: string
+                serviceType:
+                  type: string
+                  nullable: true
+                policyNumber:
+                  type: string
+                  nullable: true
+                contractDate:
+                  type: string
+                  format: date
+                expiryDate:
+                  type: string
+                  format: date
+                  nullable: true
+                status:
+                  type: string
+                  enum: [active, expired, cancelled, pending]
+                coverageAmount:
+                  type: number
+                  nullable: true
+                premiumAmount:
+                  type: number
+                  nullable: true
+                monthpay:
+                  type: number
+                  nullable: true
+                companyName:
+                  type: string
+                  nullable: true
+                currency:
+                  type: string
+                  nullable: true
+                notes:
+                  type: string
+                  nullable: true
+                beneficiaryName:
+                  type: string
+                  nullable: true
+                beneficiaryPhone:
+                  type: string
+                  nullable: true
+                serviceImages:
+                  type: string
+                  nullable: true
+                serviceDocuments:
+                  type: string
+                  nullable: true
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
       responses:
         "200":
           description: Servicio actualizado
@@ -1355,6 +1474,10 @@ paths:
                       calificacion:
                         type: number
                         nullable: true
+                      tiempo_respuesta:
+                        type: number
+                        nullable: true
+                        description: Tiempo de respuesta en minutos
                       especialidades:
                         type: array
                         items:
