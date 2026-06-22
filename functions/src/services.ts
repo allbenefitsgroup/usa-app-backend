@@ -493,6 +493,151 @@ export async function handleDeleteService(req: Request, res: Response) {
   }
 }
 
+export async function handleGetService(req: Request, res: Response) {
+  try {
+    const authContext = (req as any).authContext;
+    if (!authContext) {
+      res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
+      return;
+    }
+
+    const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: { message: "id is required.", status: "INVALID_ARGUMENT" } });
+      return;
+    }
+
+    const result = await ddb.send(
+      new GetCommand({
+        TableName: SERVICES_TABLE,
+        Key: { id },
+      })
+    );
+
+    if (!result.Item) {
+      res.status(404).json({ error: { message: "Service not found.", status: "NOT_FOUND" } });
+      return;
+    }
+
+    const service = result.Item as any;
+
+    // Only allow owner or seller/admin to view
+    const isOwner = service.userId === authContext.uid;
+    const isAdmin = ["seller", "admin"].includes(authContext.role);
+    if (!isOwner && !isAdmin) {
+      res.status(403).json({ error: { message: "Forbidden: access denied.", status: "PERMISSION_DENIED" } });
+      return;
+    }
+
+    res.json({ ok: true, service });
+  } catch (error: any) {
+    console.error("GetService error:", error);
+    res.status(500).json({ error: { message: error.message || "Internal server error", status: "INTERNAL" } });
+  }
+}
+
+export async function handleUploadServiceFiles(req: Request, res: Response) {
+  try {
+    const authContext = (req as any).authContext;
+    if (!authContext) {
+      res.status(401).json({ error: { message: "Unauthorized", status: "UNAUTHENTICATED" } });
+      return;
+    }
+
+    const allowedRoles = ["seller", "admin", "customer", "client"];
+    if (!allowedRoles.includes(authContext.role)) {
+      res.status(403).json({ error: { message: "Forbidden: access denied.", status: "PERMISSION_DENIED" } });
+      return;
+    }
+
+    const { serviceId } = req.params;
+    if (!serviceId) {
+      res.status(400).json({ error: { message: "serviceId is required.", status: "INVALID_ARGUMENT" } });
+      return;
+    }
+
+    const getResult = await ddb.send(
+      new GetCommand({
+        TableName: SERVICES_TABLE,
+        Key: { id: serviceId },
+      })
+    );
+
+    if (!getResult.Item) {
+      res.status(404).json({ error: { message: "Service not found.", status: "NOT_FOUND" } });
+      return;
+    }
+
+    const existing = getResult.Item as any;
+
+    // Only allow owner, seller, or admin to upload files
+    const isOwner = existing.userId === authContext.uid;
+    const isAdmin = ["seller", "admin"].includes(authContext.role);
+    if (!isOwner && !isAdmin) {
+      res.status(403).json({ error: { message: "Forbidden: you do not own this service.", status: "PERMISSION_DENIED" } });
+      return;
+    }
+
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+    const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "svg"];
+
+    let serviceImages: string[] = existing.serviceImages || [];
+    let serviceDocuments: string[] = existing.serviceDocuments || [];
+
+    if (files) {
+      // Process images field
+      const imageFiles = files["images"];
+      if (imageFiles && imageFiles.length > 0) {
+        for (const file of imageFiles) {
+          const url = await uploadToS3(file.buffer, file.originalname, file.mimetype, "services/images/");
+          serviceImages.push(url);
+        }
+      }
+
+      // Process documents field
+      const documentFiles = files["documents"];
+      if (documentFiles && documentFiles.length > 0) {
+        for (const file of documentFiles) {
+          const ext = file.originalname.split(".").pop()?.toLowerCase() || "";
+          const isImage = imageExtensions.includes(ext) || file.mimetype.startsWith("image/");
+          const prefix = isImage ? "services/images/" : "services/documents/";
+          const url = await uploadToS3(file.buffer, file.originalname, file.mimetype, prefix);
+          if (isImage) {
+            serviceImages.push(url);
+          } else {
+            serviceDocuments.push(url);
+          }
+        }
+      }
+    }
+
+    const now = new Date().toISOString();
+
+    await ddb.send(
+      new UpdateCommand({
+        TableName: SERVICES_TABLE,
+        Key: { id: serviceId },
+        UpdateExpression: "set serviceImages = :images, serviceDocuments = :docs, updatedAt = :now",
+        ExpressionAttributeValues: {
+          ":images": serviceImages.length > 0 ? serviceImages : null,
+          ":docs": serviceDocuments.length > 0 ? serviceDocuments : null,
+          ":now": now,
+        },
+      })
+    );
+
+    res.json({
+      ok: true,
+      id: serviceId,
+      serviceImages,
+      serviceDocuments,
+    });
+  } catch (error: any) {
+    console.error("UploadServiceFiles error:", error);
+    res.status(500).json({ error: { message: error.message || "Internal server error", status: "INTERNAL" } });
+  }
+}
+
 export async function handleBulkImportServices(req: Request, res: Response) {
   try {
     const authContext = (req as any).authContext;

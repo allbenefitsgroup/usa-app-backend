@@ -1170,6 +1170,28 @@ paths:
           description: Sin permisos
 
   /api/admin/services/{id}:
+    get:
+      summary: Obtener detalle de un servicio (admin)
+      description: Devuelve la informacion completa de un servicio por su ID.
+      tags:
+        - Client Services
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Detalle del servicio
+        "401":
+          description: No autenticado
+        "403":
+          description: Sin permisos
+        "404":
+          description: No encontrado
     put:
       summary: Actualizar servicio de cliente (admin)
       description: Edita cualquier campo de un servicio ya asignado. Soporta archivos via multipart/form-data.

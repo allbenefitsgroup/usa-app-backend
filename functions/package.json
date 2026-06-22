@@ -16,7 +16,6 @@
     "@aws-sdk/lib-dynamodb": "^3.1057.0",
     "@open-wa/wa-automate": "^4.76.0",
     "@sendgrid/mail": "^8.1.4",
-    "nodemailer": "^6.9.8",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -40,6 +39,6 @@
     "@types/qrcode": "^1.5.6",
     "@types/swagger-ui-express": "^4.1.8",
     "@types/yamljs": "^0.2.34",
-    "typescript": "^5.7.2"
+    "typescript": "^5.9.3"
   }
 }

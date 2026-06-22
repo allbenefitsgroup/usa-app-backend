@@ -198,6 +198,56 @@ export async function sendAdminNotificationEmail(input: AdminNotificationInput):
   });
 }
 
+interface PaymentReminderInput {
+  apiKey: string;
+  supportEmail: string;
+  appUrl: string;
+  to: string;
+  userName: string;
+  serviceName: string;
+  monthpay: number;
+  currency: string;
+  dueDate: string;
+}
+
+export async function sendPaymentReminderEmail(input: PaymentReminderInput): Promise<void> {
+  if (!input.apiKey || !input.supportEmail) {
+    console.warn("Payment reminder email skipped because EMAIL_API_KEY or SUPPORT_EMAIL is missing.");
+    return;
+  }
+
+  const transporter = createTransporter(input.apiKey, input.supportEmail);
+  const amount = formatMoney(input.monthpay, input.currency);
+
+  await transporter.sendMail({
+    from: input.supportEmail,
+    to: input.to,
+    subject: `Recordatorio de pago - ${input.serviceName}`,
+    text: [
+      `Hola ${input.userName},`,
+      "",
+      `Te recordamos que tu pago mensual de ${amount} por el servicio "${input.serviceName}" está próximo a vencer.`,
+      `Fecha de vencimiento: ${input.dueDate}`,
+      "",
+      `Por favor realiza el pago a tiempo para evitar la suspensión del servicio.`,
+      "",
+      `Si ya realizaste el pago, ignora este mensaje.`,
+      "",
+      `Saludos,`,
+      `El equipo de USA All Benefits Group`,
+    ].join("\n"),
+    html: `
+      <p>Hola <strong>${input.userName}</strong>,</p>
+      <p>Te recordamos que tu pago mensual de <strong>${amount}</strong> por el servicio <strong>"${input.serviceName}"</strong> está próximo a vencer.</p>
+      <p><strong>Fecha de vencimiento:</strong> ${input.dueDate}</p>
+      <p>Por favor realiza el pago a tiempo para evitar la suspensión del servicio.</p>
+      <p>Si ya realizaste el pago, ignora este mensaje.</p>
+      <br>
+      <p>Saludos,<br>El equipo de USA All Benefits Group</p>
+    `,
+  });
+}
+
 export async function sendWelcomeEmail(input: WelcomeEmailInput): Promise<void> {
   if (!input.apiKey || !input.supportEmail) {
     console.warn("Welcome email was skipped because EMAIL_API_KEY or SUPPORT_EMAIL is missing.");

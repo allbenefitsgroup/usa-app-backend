@@ -40,11 +40,14 @@ import {
   handleGetMyServices,
   handleCreateService,
   handleListAllServices,
+  handleGetService,
   handleUpdateService,
   handleDeleteService,
   handleBulkImportServices,
+  handleUploadServiceFiles,
 } from "./services";
 import { handleGenerateSellerQR, handleGetPublicSellerProfile } from "./qr";
+import { startPaymentReminderScheduler } from "./notifications";
 import {
   handleListServiceCatalog,
   handleListAllCatalogItems,
@@ -164,6 +167,7 @@ app.get("/api/public/sellers/:id", handleGetPublicSellerProfile);
 app.get("/api/my-services", requireAuth, handleGetMyServices);
 app.post("/api/admin/services", requireAuth, upload.array("files", 10), handleCreateService);
 app.get("/api/admin/services", requireAuth, handleListAllServices);
+app.get("/api/admin/services/:id", requireAuth, handleGetService);
 app.put("/api/admin/services/:id", requireAuth, upload.array("files", 10), handleUpdateService);
 app.delete("/api/admin/services/:id", requireAuth, handleDeleteService);
 app.post("/api/admin/services/bulk", requireAuth, handleBulkImportServices);
@@ -171,8 +175,12 @@ app.post("/api/admin/services/bulk", requireAuth, handleBulkImportServices);
 // Alias for frontend compatibility
 app.post("/api/admin/client-services", requireAuth, upload.array("files", 10), handleCreateService);
 app.get("/api/admin/client-services", requireAuth, handleListAllServices);
+app.get("/api/admin/client-services/:id", requireAuth, handleGetService);
 app.put("/api/admin/client-services/:id", requireAuth, upload.array("files", 10), handleUpdateService);
 app.delete("/api/admin/client-services/:id", requireAuth, handleDeleteService);
+
+// Upload files to an existing service (frontend-facing)
+app.post("/api/services/:serviceId/files", requireAuth, upload.fields([{ name: "images", maxCount: 10 }, { name: "documents", maxCount: 10 }]), handleUploadServiceFiles);
 
 // Protected business endpoints
 app.post("/api/syncUserProfile", requireAuth, wrapHandler(handleSyncUserProfile));
@@ -331,6 +339,7 @@ const PORT = process.env.PORT || 3000;
 if (!process.env.FUNCTIONS_EMULATOR && !process.env.K_SERVICE) {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    startPaymentReminderScheduler();
   });
 }
 

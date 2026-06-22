@@ -147,6 +147,7 @@ export interface ClientService {
   serviceDocuments?: string[] | null;
   monthpay?: number | null;
   companyName?: string | null;
+  lastPaymentNotificationSent?: Timestamp | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
