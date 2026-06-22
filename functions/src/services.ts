@@ -396,8 +396,10 @@ export async function handleUpdateService(req: Request, res: Response) {
     const files = req.files as Express.Multer.File[] | undefined;
     if (files && files.length > 0) {
       const imageExtensions = ["jpg", "jpeg", "png", "gif", "webp", "svg"];
-      let newImages: string[] = serviceImages || [];
-      let newDocs: string[] = serviceDocuments || [];
+      // Use existing arrays from DB when body doesn't include them
+      const existingService = getResult.Item as any;
+      let newImages: string[] = serviceImages !== undefined ? serviceImages : (existingService.serviceImages || []);
+      let newDocs: string[] = serviceDocuments !== undefined ? serviceDocuments : (existingService.serviceDocuments || []);
       for (const file of files) {
         const ext = file.originalname.split(".").pop()?.toLowerCase() || "";
         const isImage = imageExtensions.includes(ext) || file.mimetype.startsWith("image/");
