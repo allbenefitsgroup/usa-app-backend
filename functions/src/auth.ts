@@ -435,15 +435,16 @@ export async function handleGetUser(req: Request, res: Response) {
       return;
     }
 
-    const allowedRoles = ["seller", "admin"];
-    if (!allowedRoles.includes(authContext.role || "")) {
-      res.status(403).json({ error: { message: "Forbidden: admin access required.", status: "PERMISSION_DENIED" } });
-      return;
-    }
-
     const { id } = req.params;
     if (!id) {
       res.status(400).json({ error: { message: "id is required.", status: "INVALID_ARGUMENT" } });
+      return;
+    }
+
+    const allowedRoles = ["seller", "admin"];
+    const isOwnProfile = authContext.uid === id;
+    if (!allowedRoles.includes(authContext.role || "") && !isOwnProfile) {
+      res.status(403).json({ error: { message: "Forbidden: admin access required.", status: "PERMISSION_DENIED" } });
       return;
     }
 
@@ -815,15 +816,16 @@ export async function handleDeleteUser(req: Request, res: Response) {
       return;
     }
 
-    const allowedRoles = ["seller", "admin"];
-    if (!allowedRoles.includes(authContext.role || "")) {
-      res.status(403).json({ error: { message: "Forbidden: admin access required.", status: "PERMISSION_DENIED" } });
-      return;
-    }
-
     const { id } = req.params;
     if (!id) {
       res.status(400).json({ error: { message: "id is required.", status: "INVALID_ARGUMENT" } });
+      return;
+    }
+
+    const allowedRoles = ["seller", "admin"];
+    const isOwnAccount = authContext.uid === id;
+    if (!allowedRoles.includes(authContext.role || "") && !isOwnAccount) {
+      res.status(403).json({ error: { message: "Forbidden: admin access required.", status: "PERMISSION_DENIED" } });
       return;
     }
 
